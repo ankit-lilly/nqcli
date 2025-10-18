@@ -101,3 +101,10 @@ Launch the embedded HTTP server for a browser-based experience:
 ./nq server --addr :8080
 ```
 
+
+## Limitations
+
+
+- Only supports Gremlin and Cypher queries.
+- You need to manage the token yourself. If you are using webui and the token is invalid/expired, you need to restart the server after updating the token in env vars.
+So you just need to do ctrl+c and re-run the server command after updating the token.

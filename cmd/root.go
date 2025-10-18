@@ -17,12 +17,10 @@ var rootCmd = &cobra.Command{
 	Use:   "nq-cli [query_file|query]",
 	Short: "Execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.",
 	Long: `A CLI tool to execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.
-
-Usage:
-  echo "query" | nq-cli [--type gremlin|cypher]
-  nq-cli [--type gremlin|cypher] "query"
-  nq-cli [--type gremlin|cypher] <query_file>
-`,
+	Usage:
+	echo "query" | nq-cli [--type gremlin|cypher]
+	nq-cli [--type gremlin|cypher] "query"
+	nq-cli [--type gremlin|cypher] <query_file>`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
