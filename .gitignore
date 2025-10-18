@@ -1,0 +1,7 @@
+nq
+*.groovy
+*.cypher
+.gocache/
+.gomodcache/
+*.env
+

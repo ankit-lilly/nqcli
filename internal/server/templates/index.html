@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-color-scheme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SDR Query Runner</title>
+    <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css" />
+    <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/styles/default.min.css" />
+    <script src="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+    <script src="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/languages/groovy.min.js"></script>
+    <script src="https://unpkg.com/@highlightjs/cdn-assets@11.11.1/languages/json.min.js"></script>
+    <script src="https://unpkg.com/highlightjs-cypher/dist/cypher.min.js" type="text/javascript"></script>
+    <script>hljs.highlightAll();</script>
+    <style>
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+      }
+
+      main {
+        width: 100%;
+      }
+
+      .hljs {
+        background: var(--bg-muted) !important;
+        box-shadow: none !important;
+      }
+
+      pre {
+        margin: 0;
+      }
+
+      pre code {
+        display: block;
+        padding: 0.75rem;
+        box-sizing: border-box;
+      }
+
+      #result-content {
+        max-height: 240px;
+        min-height: 240px;
+        overflow: scroll;
+      }
+
+      .copy_button_container {
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div role="alert" class="flash fg-danger" data-role="error" hidden></div>
+      <section>
+        <form class="form" id="query-form" novalidate>
+          <fieldset class="accent">
+            <legend>Language</legend>
+            <label>
+              <select id="query-type" name="type">
+                <option value="gremlin">Gremlin</option>
+                <option value="cypher">Cypher</option>
+              </select>
+            </label>
+          </fieldset>
+          <fieldset class="accent">
+            <legend>Query</legend>
+            <label class="editor">
+              <textarea id="query-text" name="query" rows="10" placeholder="Enter your Gremlin or Cypher query here"></textarea>
+              <div class="highlight"></div>
+            </label>
+          </fieldset>
+          <button type="submit" data-role="submit">
+            Run
+          </button>
+        </form>
+      </section>
+      <section id="result" aria-live="polite">
+        <header>
+          <h2> Output </h2>
+        </header>
+        <div class="copy_button_container">
+          <button type="button" data-role="copy">Copy</button>
+        </div>
+        <pre><code class="language-json" id="result-content">[]</code></pre>
+      </section>
+    </main>
+    <script>
+      {
+        /// <reference lib="dom" />
+        const editor = document.currentScript.previousElementSibling;
+        const textarea = editor.querySelector("textarea");
+        const highlight = editor.querySelector(".highlight");
+        const queryTypeField = document.getElementById("query-type");
+
+        textarea.addEventListener("input", () => coloration(textarea.value));
+        textarea.addEventListener("scroll", function () {
+          highlight.scrollTop = this.scrollTop;
+          highlight.scrollLeft = this.scrollLeft;
+        });
+        function currentLanguage() {
+          return queryTypeField.value === "cypher" ? "cypher" : "groovy";
+        }
+        function coloration(value) {
+          if (!value) {
+            highlight.innerHTML = "";
+            return;
+          }
+          highlight.innerHTML = hljs.highlight(value, { language: currentLanguage() }).value;
+        }
+        queryTypeField.addEventListener("change", () => {
+          textarea.value = "";
+          coloration("");
+        });
+        coloration(textarea.value);
+      }
+    </script>
+    <script>
+      const form = document.getElementById("query-form");
+      const resultContent = document.getElementById("result-content");
+      const errorMessage = document.querySelector('[data-role="error"]');
+      const copyButton = document.querySelector('[data-role="copy"]');
+      const queryTypeField = document.getElementById("query-type");
+      const submitButton = document.querySelector('[data-role="submit"]');
+      const queryField = document.getElementById("query-text");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const payload = {
+          type: queryTypeField.value,
+          query: queryField.value,
+        };
+
+        console.log("Submitting payload:", payload);
+
+        errorMessage.hidden = true;
+        submitButton.textContent = "Running...";
+        submitButton.disabled = true;
+        submitButton.setAttribute("aria-busy", "true");
+
+        try {
+          const response = await fetch("/queries", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || "Request failed");
+          }
+
+          const processed = data.processed || "(empty response)";
+          resultContent.textContent = processed;
+          resultContent.removeAttribute("data-highlighted");
+          resultContent.classList.remove("hljs");
+          hljs.highlightElement(resultContent);
+          copyButton.hidden = processed.length === 0;
+          copyButton.classList.remove("is-copied");
+          copyButton.textContent = "Copy";
+        } catch (error) {
+          errorMessage.textContent = error.message;
+          errorMessage.hidden = false;
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Run";
+          submitButton.removeAttribute("aria-busy");
+        }
+      });
+
+      copyButton.addEventListener("click", async () => {
+        const textToCopy = resultContent.textContent;
+        if (!textToCopy) {
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+          copyButton.classList.add("is-copied");
+          copyButton.textContent = "Copied!";
+          setTimeout(() => {
+            copyButton.classList.remove("is-copied");
+            copyButton.textContent = "Copy";
+          }, 1500);
+        } catch (error) {
+          errorMessage.textContent = "Failed to copy to clipboard.";
+          errorMessage.hidden = false;
+        }
+      });
+    </script>
+  </body>
+</html>
