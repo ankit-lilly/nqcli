@@ -26,8 +26,6 @@ archives:
         format: zip
     files:
       - README.md
-      - LICENSE*
-      - new.cypher
 
 checksum:
   name_template: "checksums.txt"
