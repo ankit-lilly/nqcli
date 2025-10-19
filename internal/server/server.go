@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"time"
 
@@ -24,7 +25,13 @@ const (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-var indexTemplate = template.Must(template.ParseFS(templateFS, "templates/index.html"))
+//go:embed assets/*
+var assetsFS embed.FS
+
+var (
+	indexTemplate   = template.Must(template.ParseFS(templateFS, "templates/index.html"))
+	assetFileSystem = mustSubFS(assetsFS, "assets")
+)
 
 type queryExecutor interface {
 	ExecuteQuery(string, string) (string, string, error)
@@ -49,6 +56,7 @@ func New(appService queryExecutor, logger *log.Logger) *Server {
 }
 
 func (s *Server) routes() {
+	s.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetFileSystem))))
 	s.mux.HandleFunc("/", s.handleIndex())
 	s.mux.HandleFunc("/healthz", s.handleHealthz())
 	s.mux.HandleFunc("/queries", s.handleExecuteQuery())
@@ -163,4 +171,13 @@ func (s *Server) handleIndex() http.HandlerFunc {
 			s.logger.Error("failed to render template", "error", err)
 		}
 	}
+}
+
+func mustSubFS(fsys embed.FS, dir string) fs.FS {
+	sub, err := fs.Sub(fsys, dir)
+	if err != nil {
+		panic(err)
+	}
+
+	return sub
 }
