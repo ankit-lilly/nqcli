@@ -1,5 +1,19 @@
 hljs.highlightAll();
 
+const hljsThemeLink = document.getElementById("codetheme");
+
+const HLJS_THEMES = {
+  light: "github.min.css",
+  dark:  "github-dark.min.css",
+};
+
+function setHljsTheme(scheme) {
+  if (!hljsThemeLink) return;
+  const file = HLJS_THEMES[scheme] || HLJS_THEMES.light;
+  hljsThemeLink.href = `https://unpkg.com/@highlightjs/cdn-assets@11.11.1/styles/${file}`;
+}
+
+
 const form = document.getElementById("query-form");
 const resultContent = document.getElementById("result-content");
 const resultContainer = resultContent.parentElement;
@@ -10,6 +24,56 @@ const submitButton = document.querySelector('[data-role="submit"]');
 const queryField = document.getElementById("query-text");
 const editor = document.querySelector(".editor");
 const highlightOverlay = editor?.querySelector(".highlight");
+const themeToggle = document.querySelector('[data-role="theme-toggle"]');
+const rootElement = document.documentElement;
+
+if (themeToggle) {
+  const schemes = new Set(["light", "dark"]);
+  const storageKey = "nqcli-color-scheme";
+
+  const readStoredScheme = () => {
+    try {
+      return window.localStorage?.getItem(storageKey) ?? null;
+    } catch (error) {
+      console.warn("Color scheme storage read failed:", error);
+      return null;
+    }
+  };
+
+  const writeStoredScheme = (scheme) => {
+    try {
+      window.localStorage?.setItem(storageKey, scheme);
+    } catch (error) {
+      console.warn("Color scheme storage write failed:", error);
+    }
+  };
+
+  const applyScheme = (scheme) => {
+    const nextScheme = schemes.has(scheme) ? scheme : "light";
+    rootElement.dataset.colorScheme = nextScheme;
+    themeToggle.setAttribute("aria-pressed", nextScheme === "dark");
+    writeStoredScheme(nextScheme);
+    setHljsTheme(nextScheme);
+  };
+
+  const detectInitialScheme = () => {
+    const stored = readStoredScheme();
+    if (schemes.has(stored)) {
+      return stored;
+    }
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    return prefersDark
+      ? "dark"
+      : "light";
+  };
+
+  applyScheme(detectInitialScheme());
+
+  themeToggle.addEventListener("click", () => {
+    const current = rootElement.dataset.colorScheme === "dark" ? "dark" : "light";
+    applyScheme(current === "dark" ? "light" : "dark");
+  });
+}
 
 if (editor && highlightOverlay && queryField && queryTypeField) {
   const currentLanguage = () =>

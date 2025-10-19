@@ -8,6 +8,51 @@ main {
   width: 100%;
 }
 
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -10px rgba(0, 0, 0, 0.7);
+}
+
+.theme-toggle:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.theme-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+}
+
+[data-color-scheme="light"] .theme-toggle .icon-moon {
+  display: none;
+}
+
+[data-color-scheme="dark"] .theme-toggle .icon-sun {
+  display: none;
+}
+
 .hljs {
   background: var(--bg-muted) !important;
   box-shadow: none !important;
