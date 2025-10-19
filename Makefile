@@ -11,3 +11,7 @@ fmt:
 .PHONY: clean
 clean:
 	@rm nq
+
+.PHONY: test
+test:
+	@go test ./...

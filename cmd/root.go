@@ -13,14 +13,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type queryService interface {
+	Execute(string, string) (string, string, error)
+	ExecuteQuery(string, string) (string, string, error)
+}
+
+var newQueryService = func() queryService {
+	cfg := config.LoadConfig()
+	neptuneClient := neptune.NewClient(cfg)
+	return app.NewAppService(neptuneClient)
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "nq-cli [query_file|query]",
 	Short: "Execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.",
 	Long: `A CLI tool to execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.
-	Usage:
-	echo "query" | nq-cli [--type gremlin|cypher]
-	nq-cli [--type gremlin|cypher] "query"
-	nq-cli [--type gremlin|cypher] <query_file>`,
+
+Usage:
+  echo "query" | nq-cli [--type gremlin|cypher]
+  nq-cli [--type gremlin|cypher] "query"
+  nq-cli [--type gremlin|cypher] <query_file>`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -49,9 +61,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		cfg := config.LoadConfig()
-		neptuneClient := neptune.NewClient(cfg)
-		appService := app.NewAppService(neptuneClient)
+		appService := newQueryService()
 
 		l := log.NewWithOptions(os.Stderr, log.Options{
 			ReportTimestamp: false,

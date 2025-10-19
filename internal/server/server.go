@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ankit-lilly/nqcli/internal/app"
-
 	"github.com/charmbracelet/log"
 )
 
@@ -28,13 +26,17 @@ var templateFS embed.FS
 
 var indexTemplate = template.Must(template.ParseFS(templateFS, "templates/index.html"))
 
+type queryExecutor interface {
+	ExecuteQuery(string, string) (string, string, error)
+}
+
 type Server struct {
-	app    *app.AppService
+	app    queryExecutor
 	logger *log.Logger
 	mux    *http.ServeMux
 }
 
-func New(appService *app.AppService, logger *log.Logger) *Server {
+func New(appService queryExecutor, logger *log.Logger) *Server {
 	s := &Server{
 		app:    appService,
 		logger: logger,

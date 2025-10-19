@@ -8,9 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ankit-lilly/nqcli/internal/app"
-	"github.com/ankit-lilly/nqcli/internal/config"
-	neptune "github.com/ankit-lilly/nqcli/internal/gq"
 	httpserver "github.com/ankit-lilly/nqcli/internal/server"
 
 	"github.com/charmbracelet/log"
@@ -33,9 +30,7 @@ func newServerCommand() *cobra.Command {
 				return err
 			}
 
-			cfg := config.LoadConfig()
-			neptuneClient := neptune.NewClient(cfg)
-			appService := app.NewAppService(neptuneClient)
+			appService := newQueryService()
 
 			logger := log.NewWithOptions(os.Stderr, log.Options{
 				ReportTimestamp: true,
