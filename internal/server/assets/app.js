@@ -176,19 +176,22 @@ copyButton.addEventListener("click", async () => {
 
 function triggerResultFeedback() {
   resultContainer.classList.remove("result-highlight");
-  // Force reflow so animation can restart
+  // Force reflow so animation can restart ( https://stackoverflow.com/questions/60686489/what-purpose-does-void-element-offsetwidth-serve )
   void resultContainer.offsetWidth;
   resultContainer.classList.add("result-highlight");
   subtleScroll(resultContent);
 }
 
 function subtleScroll(element) {
-  const initial = element.scrollTop;
+  //scrollTop: Current vertical scroll position of the element.
+  //clientHeight: Visible height of the element (viewport).
+  //scrollHeight: Total height of the content, including the part not visible.
+  const initial = 0;
   const available = element.scrollHeight - element.clientHeight;
   if (available <= 0) {
     return;
   }
-  const delta = Math.min(available, 40);
+  const delta = Math.min(available, 70);
   smoothScrollTo(element, initial + delta);
   setTimeout(() => {
     smoothScrollTo(element, initial);
