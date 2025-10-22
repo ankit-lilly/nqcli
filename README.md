@@ -46,6 +46,8 @@ curl -fsSL https://raw.githubusercontent.com/ankit-lilly/nqcli/main/scripts/inst
 
 The script detects your OS/architecture, downloads the matching release asset, clears the macOS quarantine attribute when necessary, and installs `nq` into `/usr/local/bin` (override with `INSTALL_DIR=/your/path`). Set `VERSION=vX.Y.Z` to pin a specific release.
 
+If you hit GitHub API rate limits, export `GITHUB_TOKEN=your_token` before running the installer.
+
 Clone the repository and install the binary:
 
 ```bash

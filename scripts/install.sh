@@ -65,12 +65,15 @@ fetch_release_json() {
     api_url="https://api.github.com/repos/${REPO}/releases/tags/${VERSION}"
   fi
 
-  curl_args=(-fsSL -H "Accept: application/vnd.github+json")
+  curl_args=(-fsSL -H "Accept: application/vnd.github+json" -H "User-Agent: ${USER_AGENT:-nqcli-installer}")
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   fi
 
   release_json=$(curl "${curl_args[@]}" "${api_url}") || err "failed to fetch release metadata from ${api_url}"
+  if [[ -z "${release_json}" ]]; then
+    err "received empty response from GitHub API; check network access or ensure releases exist for ${REPO}"
+  fi
 }
 
 select_asset() {
