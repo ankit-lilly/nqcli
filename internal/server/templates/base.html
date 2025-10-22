@@ -1,0 +1,14 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+  {{template "head" .}}
+  <body>
+    <main>
+      {{template "page-header" .}}
+      {{template "alert" .}}
+      {{template "query-form" .}}
+      {{template "query-result" .}}
+    </main>
+  </body>
+</html>
+{{end}}

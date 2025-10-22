@@ -36,6 +36,16 @@ Note that default query type is gremlin. You can override it with `--type` flag.
 
 ## Installation
 
+### One-line installer
+
+You can install the latest release binary directly (macOS & Linux) with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ankit-lilly/nqcli/main/scripts/install.sh | bash
+```
+
+The script detects your OS/architecture, downloads the matching release asset, clears the macOS quarantine attribute when necessary, and installs `nq` into `/usr/local/bin` (override with `INSTALL_DIR=/your/path`). Set `VERSION=vX.Y.Z` to pin a specific release.
+
 Clone the repository and install the binary:
 
 ```bash
@@ -49,6 +59,16 @@ If you just want to compile locally:
 ```bash
 make build
 ```
+
+### macOS release install helper
+
+If you download the pre-built binary from GitHub Releases on macOS, run the helper script to clear the quarantine attribute and install the binary into `/usr/local/bin` (or your chosen `INSTALL_DIR`):
+
+```bash
+./scripts/install-macos.sh ~/Downloads/nq
+```
+
+The script accepts a single argument: the path to the downloaded `nq` binary. Override the destination by setting `INSTALL_DIR=/your/path` before invoking the script.
 
 ---
 
@@ -100,6 +120,38 @@ Launch the embedded HTTP server for a browser-based experience:
 ```bash
 ./nq server --addr :8080
 ```
+
+---
+
+## Docker
+
+Build a tiny image and run the server without installing Go locally:
+
+```bash
+docker build -t nqcli:latest .
+```
+
+Provide configuration either with individual variables or an env file:
+
+```bash
+# Using env vars
+docker run --rm -p 8080:8080 \
+  -e NEPTUNE_URL=https://your-appsync-id.appsync-api.us-east-1.amazonaws.com/graphql \
+  -e NEPTUNE_TOKEN=eyJhbGciOi... \
+  nqcli:latest
+
+# Or share a .env file (see .env.example)
+docker run --rm -p 8080:8080 --env-file .env nqcli:latest
+```
+
+By default the container starts the web UI on `0.0.0.0:8080`. Override the address or run CLI commands by appending the desired arguments:
+
+```bash
+docker run --rm nqcli:latest server --addr 0.0.0.0:9090
+docker run --rm --env-file .env nqcli:latest --type cypher "MATCH (n) RETURN n LIMIT 5"
+```
+
+When using the CLI mode, remember to pass input via stdin or files mounted into the container.
 
 
 ## Limitations

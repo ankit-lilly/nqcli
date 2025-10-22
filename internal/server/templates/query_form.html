@@ -1,0 +1,25 @@
+{{define "query-form"}}
+      <section>
+        <form class="form" id="query-form" novalidate>
+          <fieldset>
+            <legend>Language</legend>
+            <label>
+              <select id="query-type" name="type">
+                <option value="gremlin">Gremlin</option>
+                <option value="cypher">Cypher</option>
+              </select>
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Query</legend>
+            <label class="editor">
+              <textarea id="query-text" name="query" rows="10" placeholder="Enter your Gremlin or Cypher query here"></textarea>
+              <div class="highlight"></div>
+            </label>
+          </fieldset>
+          <button type="submit" data-role="submit" class="button-fixed success">
+            Run
+          </button>
+        </form>
+      </section>
+{{end}}

@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.*
+Dockerfile
+Makefile
+README.md
+test.*
+*.cypher
+*.groovy
+nq
+cmd/root_test.go

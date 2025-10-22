@@ -29,7 +29,7 @@ var templateFS embed.FS
 var assetsFS embed.FS
 
 var (
-	indexTemplate   = template.Must(template.ParseFS(templateFS, "templates/index.html"))
+	pageTemplates   = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 	assetFileSystem = mustSubFS(assetsFS, "assets")
 )
 
@@ -167,7 +167,7 @@ func (s *Server) handleIndex() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", contentTypeHTML)
-		if err := indexTemplate.Execute(w, nil); err != nil {
+		if err := pageTemplates.ExecuteTemplate(w, "index", nil); err != nil {
 			s.logger.Error("failed to render template", "error", err)
 		}
 	}
