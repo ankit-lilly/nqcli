@@ -85,25 +85,6 @@ pre code {
   margin-bottom: 1rem;
 }
 
-.result-highlight {
-  animation: resultPulse 3s ease;
-}
-
-@keyframes resultPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(99, 179, 237, 0.5);
-    background-color: var(--bg-muted);
-  }
-  60% {
-    box-shadow: 0 0 0 8px rgba(99, 179, 237, 0);
-    background-color: var(--bg-subtle);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(99, 179, 237, 0);
-    background-color: transparent; /* Back to normal */
-  }
-}
-
 .btn-flash {
   animation: buttonFlash 0.4s ease;
 }
@@ -140,4 +121,39 @@ pre code {
     box-shadow: 0 0 0 0 rgba(99, 179, 237, 0);
     transform: translateY(0);
   }
+}
+
+.result-overlay-host {
+  position: relative;
+}
+
+.spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 999;
+}
+
+.spinner-overlay.is-active {
+  opacity: 1;
+}
+
+.spinner-overlay__content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg, #fff);
+}
+
+.spinner-overlay__content svg {
+  display: block;
 }
