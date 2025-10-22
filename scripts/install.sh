@@ -74,9 +74,47 @@ fetch_release_json() {
   if [[ -z "${release_json}" ]]; then
     err "received empty response from GitHub API; check network access or ensure releases exist for ${REPO}"
   fi
+
+  if command -v jq >/dev/null 2>&1; then
+    ASSETS_JSON=$(printf '%s' "${release_json}" | jq -r '.assets[]?.name' || true)
+    if [[ -z "${ASSETS_JSON}" ]]; then
+      err "no assets found in release metadata; verify that the release is published and contains binaries"
+    fi
+  fi
 }
 
-select_asset() {
+select_asset_from_checksums() {
+  local checksums_url checksum_pattern checksum_content
+  checksums_url="https://github.com/${REPO}/releases/latest/download/checksums.txt"
+  log "Attempting to determine asset via checksums.txt"
+  checksum_content=$(curl -fsSL "${checksums_url}" || true)
+  if [[ -z "${checksum_content}" ]]; then
+    log "checksums.txt not available; falling back to GitHub API lookup"
+    return 1
+  fi
+
+  case "${TARGET_OS}" in
+    darwin|linux)
+      checksum_pattern="${TARGET_OS}_${TARGET_ARCH}\\.tar\\.gz"
+      ;;
+    *)
+      checksum_pattern="${TARGET_OS}_${TARGET_ARCH}"
+      ;;
+  esac
+
+  ASSET_NAME=$(printf '%s\n' "${checksum_content}" | awk "/${checksum_pattern}/ {print \$2; exit}")
+  if [[ -z "${ASSET_NAME}" ]]; then
+    log "checksums.txt did not contain an asset matching ${TARGET_OS}/${TARGET_ARCH}; falling back to GitHub API lookup"
+    return 1
+  fi
+
+  ASSET_URL="https://github.com/${REPO}/releases/latest/download/${ASSET_NAME}"
+  return 0
+}
+
+select_asset_via_api() {
+  detect_python
+
   local asset_info
   asset_info=$(printf '%s' "${release_json}" | "${PYTHON_BIN}" <<'PY'
 import json
@@ -117,6 +155,22 @@ PY
   if [[ -z "${ASSET_URL}" ]]; then
     err "release asset URL was empty"
   fi
+}
+
+select_asset() {
+  if select_asset_from_checksums; then
+    return
+  fi
+
+  if [[ -z "${release_json:-}" ]]; then
+    fetch_release_json
+  fi
+
+  if [[ "${release_json:0:1}" != "{" ]]; then
+    err "unexpected response from GitHub API:\n${release_json}"
+  fi
+
+  select_asset_via_api
 }
 
 download_asset() {
@@ -189,9 +243,7 @@ install_binary() {
 main() {
   require_cmd curl
   require_cmd install
-  detect_python
   detect_platform
-  fetch_release_json
   select_asset
   download_asset
   extract_binary
