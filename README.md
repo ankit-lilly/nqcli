@@ -78,6 +78,8 @@ The script accepts a single argument: the path to the downloaded `nq` binary. Ov
 
 `nqcli` reads its configuration from environment variables (and optionally a `.env` file if present):
 
+Use `--env-file /path/to/file` (available on both CLI and `server` subcommand) to explicitly load a `.env` file. When the flag is omitted the tool searches for `.env` in the current directory first, then falls back to `~/.env`.
+
 | Variable         | Description                                              | Default                                 |
 | ---------------- | -------------------------------------------------------- | --------------------------------------- |
 | `NEPTUNE_URL`    | AppSync GraphQL endpoint                                 | Hard-coded demo URL (replace in prod)   |

@@ -18,6 +18,10 @@ type queryService interface {
 	ExecuteQuery(string, string) (string, string, error)
 }
 
+var (
+	envFilePath string
+)
+
 var newQueryService = func() queryService {
 	cfg := config.LoadConfig()
 	neptuneClient := neptune.NewClient(cfg)
@@ -25,14 +29,14 @@ var newQueryService = func() queryService {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "nq-cli [query_file|query]",
+	Use:   "nq [query_file|query]",
 	Short: "Execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.",
 	Long: `A CLI tool to execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.
 
 Usage:
-  echo "query" | nq-cli [--type gremlin|cypher]
-  nq-cli [--type gremlin|cypher] "query"
-  nq-cli [--type gremlin|cypher] <query_file>`,
+  echo "query" | nq [--type gremlin|cypher]
+  nq [--type gremlin|cypher] "query"
+  nq [--type gremlin|cypher] <query_file>`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -96,6 +100,20 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(
+		&envFilePath,
+		"env-file",
+		"",
+		"Path to a .env file to load before executing (defaults to ./ .env, then ~/.env).",
+	)
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if err := config.LoadEnvironment(envFilePath); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	rootCmd.Flags().String(
 		"type",
 		"gremlin",
