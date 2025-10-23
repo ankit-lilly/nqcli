@@ -1,8 +1,6 @@
 # nqcli
 
-This is just an internal tool to execute Gremlin and Cypher queries. This is specifically made for DTF SDR. It uses a GraphQL API exposed by the DTF Backend to run queries against the database. 
-
-You need a token to authenticate against the API. You can get it from the SDR UI.
+This is just an internal tool to execute Gremlin and Cypher queries. This is specifically made for DTF SDR. It uses a GraphQL API exposed by the DTF Backend to run queries against the database.  You need a token to authenticate against the API. You can get it from the SDR UI.
 
 ---
 
@@ -46,9 +44,8 @@ curl -fsSL https://raw.githubusercontent.com/ankit-lilly/nqcli/main/scripts/inst
 
 The script detects your OS/architecture, downloads the matching release asset, clears the macOS quarantine attribute when necessary, and installs `nq` into `/usr/local/bin` (override with `INSTALL_DIR=/your/path`). Set `VERSION=vX.Y.Z` to pin a specific release.
 
-If you hit GitHub API rate limits, export `GITHUB_TOKEN=your_token` before running the installer.
 
-Clone the repository and install the binary:
+### Build from source
 
 ```bash
     git clone https://github.com/ankit-lilly/nqcli.git
@@ -63,18 +60,6 @@ make build
 ```
 
 Set `VERSION=vX.Y.Z` when invoking `make build` to embed a specific version string in the compiled binary.
-
-### macOS release install helper
-
-If you download the pre-built binary from GitHub Releases on macOS, run the helper script to clear the quarantine attribute and install the binary into `/usr/local/bin` (or your chosen `INSTALL_DIR`):
-
-```bash
-./scripts/install-macos.sh ~/Downloads/nq
-```
-
-The script accepts a single argument: the path to the downloaded `nq` binary. Override the destination by setting `INSTALL_DIR=/your/path` before invoking the script.
-
----
 
 ## Configuration
 

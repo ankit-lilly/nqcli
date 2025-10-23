@@ -81,7 +81,7 @@ select_asset_from_checksums() {
 
 download_asset() {
   TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "$TMP_DIR"' EXIT
+  trap 'rm -rf "$TMP_DIR"' EXIT #clean up temp dir on exit
 
   DOWNLOAD_PATH="${TMP_DIR}/${ASSET_NAME:-download}"
   curl -fL --retry 3 --retry-delay 2 -o "${DOWNLOAD_PATH}" "${ASSET_URL}" || err "failed to download ${ASSET_URL}"
@@ -153,7 +153,7 @@ main() {
   select_asset_from_checksums
   download_asset
   extract_binary
-  maybe_clear_quarantine
+  maybe_clear_quarantine # for macOS. We do this because I don't don't have money to pay for an Apple Developer ID. :D
   install_binary
 }
 
