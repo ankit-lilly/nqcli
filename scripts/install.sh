@@ -28,16 +28,6 @@ require_cmd() {
   fi
 }
 
-detect_python() {
-  if command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN=python3
-  elif command -v python >/dev/null 2>&1; then
-    PYTHON_BIN=python
-  else
-    err "python3 (or python) is required to parse the GitHub API response"
-  fi
-}
-
 detect_platform() {
   case "$(uname -s)" in
     Darwin) TARGET_OS=darwin ;;
@@ -57,40 +47,19 @@ detect_platform() {
   export TARGET_OS TARGET_ARCH
 }
 
-fetch_release_json() {
-  local api_url curl_args
-  if [[ "${VERSION}" == "latest" ]]; then
-    api_url="https://api.github.com/repos/${REPO}/releases/latest"
-  else
-    api_url="https://api.github.com/repos/${REPO}/releases/tags/${VERSION}"
-  fi
-
-  curl_args=(-fsSL -H "Accept: application/vnd.github+json" -H "User-Agent: ${USER_AGENT:-nqcli-installer}")
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  fi
-
-  release_json=$(curl "${curl_args[@]}" "${api_url}") || err "failed to fetch release metadata from ${api_url}"
-  if [[ -z "${release_json}" ]]; then
-    err "received empty response from GitHub API; check network access or ensure releases exist for ${REPO}"
-  fi
-
-  if command -v jq >/dev/null 2>&1; then
-    ASSETS_JSON=$(printf '%s' "${release_json}" | jq -r '.assets[]?.name' || true)
-    if [[ -z "${ASSETS_JSON}" ]]; then
-      err "no assets found in release metadata; verify that the release is published and contains binaries"
-    fi
-  fi
-}
-
 select_asset_from_checksums() {
-  local checksums_url checksum_pattern checksum_content
-  checksums_url="https://github.com/${REPO}/releases/latest/download/checksums.txt"
-  log "Attempting to determine asset via checksums.txt"
-  checksum_content=$(curl -fsSL "${checksums_url}" || true)
+  local downloads_base checksums_url checksum_pattern checksum_content
+  if [[ "${VERSION}" == "latest" ]]; then
+    downloads_base="https://github.com/${REPO}/releases/latest/download"
+  else
+    downloads_base="https://github.com/${REPO}/releases/download/${VERSION}"
+  fi
+
+  checksums_url="${downloads_base}/checksums.txt"
+  log "Using checksums.txt at ${checksums_url} to determine release asset"
+  checksum_content=$(curl -fsSL "${checksums_url}") || err "failed to download ${checksums_url}"
   if [[ -z "${checksum_content}" ]]; then
-    log "checksums.txt not available; falling back to GitHub API lookup"
-    return 1
+    err "checksums.txt was empty at ${checksums_url}"
   fi
 
   case "${TARGET_OS}" in
@@ -104,73 +73,10 @@ select_asset_from_checksums() {
 
   ASSET_NAME=$(printf '%s\n' "${checksum_content}" | awk "/${checksum_pattern}/ {print \$2; exit}")
   if [[ -z "${ASSET_NAME}" ]]; then
-    log "checksums.txt did not contain an asset matching ${TARGET_OS}/${TARGET_ARCH}; falling back to GitHub API lookup"
-    return 1
+    err "checksums.txt did not contain an asset matching ${TARGET_OS}/${TARGET_ARCH}"
   fi
 
-  ASSET_URL="https://github.com/${REPO}/releases/latest/download/${ASSET_NAME}"
-  return 0
-}
-
-select_asset_via_api() {
-  detect_python
-
-  local asset_info
-  asset_info=$(printf '%s' "${release_json}" | "${PYTHON_BIN}" <<'PY'
-import json
-import os
-import sys
-
-data = json.load(sys.stdin)
-assets = data.get("assets", [])
-target_os = os.environ["TARGET_OS"].lower()
-target_arch = os.environ["TARGET_ARCH"].lower()
-binary_name = os.environ["BINARY_NAME"].lower()
-fallback_name = os.environ.get("BINARY_FALLBACK", (binary_name + "cli"))
-
-def match_asset(asset, *extra_terms):
-    name = asset.get("name", "").lower()
-    terms = [target_os, target_arch] + [term for term in extra_terms if term]
-    return all(term in name for term in terms)
-
-for candidate in assets:
-    if match_asset(candidate, binary_name):
-        print(candidate["name"])
-        print(candidate["browser_download_url"])
-        sys.exit(0)
-
-for candidate in assets:
-    if match_asset(candidate, fallback_name):
-        print(candidate["name"])
-        print(candidate["browser_download_url"])
-        sys.exit(0)
-
-sys.exit("no matching asset found for os='{}' arch='{}'".format(target_os, target_arch))
-PY
-) || {
-    err "$(printf 'failed to locate a release asset for %s/%s\n%s' "${TARGET_OS}" "${TARGET_ARCH}" "${asset_info}")"
-  }
-
-  IFS=$'\n' read -r ASSET_NAME ASSET_URL <<<"${asset_info}"
-  if [[ -z "${ASSET_URL}" ]]; then
-    err "release asset URL was empty"
-  fi
-}
-
-select_asset() {
-  if select_asset_from_checksums; then
-    return
-  fi
-
-  if [[ -z "${release_json:-}" ]]; then
-    fetch_release_json
-  fi
-
-  if [[ "${release_json:0:1}" != "{" ]]; then
-    err "unexpected response from GitHub API:\n${release_json}"
-  fi
-
-  select_asset_via_api
+  ASSET_URL="${downloads_base}/${ASSET_NAME}"
 }
 
 download_asset() {
@@ -244,7 +150,7 @@ main() {
   require_cmd curl
   require_cmd install
   detect_platform
-  select_asset
+  select_asset_from_checksums
   download_asset
   extract_binary
   maybe_clear_quarantine
