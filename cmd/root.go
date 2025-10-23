@@ -20,6 +20,7 @@ type queryService interface {
 
 var (
 	envFilePath string
+	version     = "dev"
 )
 
 var newQueryService = func() queryService {
@@ -100,6 +101,9 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
+
 	rootCmd.PersistentFlags().StringVar(
 		&envFilePath,
 		"env-file",

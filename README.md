@@ -62,6 +62,8 @@ If you just want to compile locally:
 make build
 ```
 
+Set `VERSION=vX.Y.Z` when invoking `make build` to embed a specific version string in the compiled binary.
+
 ### macOS release install helper
 
 If you download the pre-built binary from GitHub Releases on macOS, run the helper script to clear the quarantine attribute and install the binary into `/usr/local/bin` (or your chosen `INSTALL_DIR`):
@@ -109,6 +111,9 @@ echo 'MATCH (n) RETURN n LIMIT 5' | ./nq --type cypher
 
 # Execute from file
 ./nq path/to/query.gql --type gremlin
+
+# Check the installed version
+./nq --version
 ```
 
 If `--type` is omitted it defaults to `gremlin`. The command validates that the type is either `gremlin` or `cypher` before execution.
