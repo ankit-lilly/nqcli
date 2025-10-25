@@ -1,11 +1,9 @@
 {{define "query-result"}}
-      <section id="result" aria-live="polite">
-        <header>
+      <section id="result" class="panel-section panel-section--result" aria-live="polite">
+        <header class="result-header">
           <h2> Output </h2>
-        </header>
-        <div class="copy_button_container">
           <button type="button" data-role="copy" class="button-fixed copy-button success">Copy</button>
-        </div>
+        </header>
         <pre><code class="language-json" id="result-content">[]</code></pre>
       </section>
 {{end}}
