@@ -19,13 +19,6 @@
   --accent-soft: rgba(241, 91, 181, 0.18);
   --danger: #e63946;
   --button-fg: #1f0a24;
-  --editor-code-fg: #1f1533;
-  --editor-code-keyword: #c026d3;
-  --editor-code-func: #7c3aed;
-  --editor-code-string: #0f9d8c;
-  --editor-code-number: #dd711a;
-  --editor-code-comment: rgba(15, 23, 42, 0.55);
-
   --radius-xl: 28px;
   --radius-lg: 18px;
   --radius-md: 12px;
@@ -55,12 +48,6 @@
   --accent-soft: rgba(255, 159, 67, 0.2);
   --danger: #ff6b6b;
   --button-fg: #1f0a24;
-  --editor-code-fg: #f3e9ff;
-  --editor-code-keyword: #ff9f43;
-  --editor-code-func: #f15bb5;
-  --editor-code-string: #34d399;
-  --editor-code-number: #facc15;
-  --editor-code-comment: rgba(244, 244, 255, 0.55);
   --shadow-soft: 0 45px 90px -45px rgba(0, 0, 0, 0.85);
   --shadow-md: 0 30px 50px -30px rgba(0, 0, 0, 0.7);
   --shadow-sm: 0 12px 30px -18px rgba(0, 0, 0, 0.6);
@@ -585,44 +572,6 @@ pre code {
 .hljs {
   background: transparent !important;
   box-shadow: none !important;
-}
-
-/* Keep editor preview legible regardless of external HLJS themes */
-.editor .highlight {
-  color: var(--editor-code-fg);
-}
-
-.editor .highlight .hljs-keyword,
-.editor .highlight .hljs-operator,
-.editor .highlight .hljs-built_in,
-.editor .highlight .hljs-literal {
-  color: var(--editor-code-keyword);
-}
-
-.editor .highlight .hljs-title,
-.editor .highlight .hljs-function,
-.editor .highlight .hljs-attr,
-.editor .highlight .hljs-property {
-  color: var(--editor-code-func);
-}
-
-.editor .highlight .hljs-string,
-.editor .highlight .hljs-template-tag,
-.editor .highlight .hljs-template-variable,
-.editor .highlight .hljs-attribute {
-  color: var(--editor-code-string);
-}
-
-.editor .highlight .hljs-number,
-.editor .highlight .hljs-symbol,
-.editor .highlight .hljs-variable {
-  color: var(--editor-code-number);
-}
-
-.editor .highlight .hljs-comment,
-.editor .highlight .hljs-quote {
-  color: var(--editor-code-comment);
-  font-style: italic;
 }
 
 .result-overlay-host {

@@ -179,7 +179,6 @@ document.addEventListener("DOMContentLoaded", () => {
     overlay.innerHTML = `
     <div class="spinner-overlay__content" role="status" aria-live="polite" aria-label="Loading">
       <span class="loading-spinner" aria-hidden="true"></span>
-      <span>Running query…</span>
     </div>
   `;
     hostElement.appendChild(overlay);
