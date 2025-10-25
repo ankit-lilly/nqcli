@@ -3,12 +3,14 @@
 <html lang="en">
   {{template "head" .}}
   <body>
-    <main>
-      {{template "page-header" .}}
-      {{template "alert" .}}
-      {{template "query-form" .}}
-      {{template "query-result" .}}
-    </main>
+    <div class="app-shell">
+      <main class="app-panel">
+        {{template "page-header" .}}
+        {{template "alert" .}}
+        {{template "query-form" .}}
+        {{template "query-result" .}}
+      </main>
+    </div>
   </body>
 </html>
 {{end}}
