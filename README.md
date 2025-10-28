@@ -115,6 +115,10 @@ Launch the embedded HTTP server for a browser-based experience:
 ./nq server --addr :8080
 ```
 
+
+<img width="3456" height="2234" alt="image" src="https://github.com/user-attachments/assets/24135c61-7d18-42b3-ab1b-a0bd1d2ea333" />
+
+
 ---
 
 ## Docker
