@@ -152,6 +152,16 @@ docker run --rm --env-file .env nqcli:latest --type cypher "MATCH (n) RETURN n L
 When using the CLI mode, remember to pass input via stdin or files mounted into the container.
 
 
+## Screenshots
+
+
+![cli](./screenshots/cli-screenshot.png)
+
+![web-darkmode](./screenshots/dark-web.png)
+![web-lightmode](./screenshots/light-web.png)
+
+
+
 ## Limitations
 
 
