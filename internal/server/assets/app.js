@@ -218,7 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      var data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Request failed");
@@ -246,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       errorMessage.textContent = error.message;
       errorMessage.hidden = false;
+      resultContent.textContent = JSON.stringify(data, null, 2);
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = "Run";
