@@ -88,8 +88,6 @@ nq server --addr :8080
 
 The server launches an interactive web UI at the provided address (default `0.0.0.0:8080`).
 
-<img width="3456" height="2234" alt="Screenshot of the nqcli web UI" src="https://github.com/user-attachments/assets/24135c61-7d18-42b3-ab1b-a0bd1d2ea333" />
-
 ## Docker
 
 Build a lightweight image and run the server without installing Go locally:
