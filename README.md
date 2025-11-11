@@ -28,6 +28,8 @@ The script detects your OS/architecture, downloads the matching release, removes
 
 ### Build from source
 
+You need Go 1.25.1 to be installed on your system.
+
 ```bash
 git clone https://github.com/ankit-lilly/nqcli.git
 cd nqcli
