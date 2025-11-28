@@ -56,6 +56,30 @@ NEPTUNE_TOKEN=eyJhbGciOi...your token...
 
 > **Note:** The defaults are placeholders. Provide real values before running queries against production Neptune instances.
 
+### Login command
+
+Instead of copying tokens from the SDR UI, run `nq login` to generate a `NEPTUNE_TOKEN` automatically. The command:
+
+- Loads API auth credentials from AWS Secrets Manager. 
+- Exchanges the credentials for an Azure AD access token via the client-credential flow.
+- Writes the token to the `.env` file in the current working directory (or the file provided via `--env-file`).
+
+Example:
+
+```bash
+# Writes NEPTUNE_TOKEN into .env (or the file passed with --env-file)
+nq login --aws-profile my-profile --aws-region us-east-2
+```
+
+Flags:
+
+- `--secret-name`: override the Secrets Manager secret that holds the API auth credentials.
+- `--aws-profile` / `--aws-region`: use a specific AWS profile or region when loading credentials.
+- `--no-write`: skip updating the env file (use with `--print-token` if you only want stdout output).
+- `--print-token`: echo the raw access token to stdout (useful for scripting; token is sensitive).
+
+You must provide AWS credentials with permissions to read the secret. The JSON document stored in the secret must include `ApiAuthClientSecret`, `ApiAuthClientId`, `ApiAuthTenantId`, and `ApiAuthScope` keys (matching the sample at `secretsStringFormat.json`).
+
 ## CLI Usage
 
 Once environment variables are set, use the binary directly:
