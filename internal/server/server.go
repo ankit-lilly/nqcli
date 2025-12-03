@@ -15,11 +15,11 @@ import (
 
 const (
 	defaultAddr       = ":8080"
-	requestBodyLimit  = 1 << 20 // 1 MiB
+	requestBodyLimit  = 1 << 20
 	defaultQueryType  = "gremlin"
 	contentTypeJSON   = "application/json"
 	contentTypeHTML   = "text/html; charset=utf-8"
-	serverReadTimeout = 10 * time.Second
+	serverReadTimeout = 15 * time.Second
 )
 
 //go:embed templates/*.html

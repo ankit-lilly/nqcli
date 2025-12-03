@@ -113,7 +113,7 @@ func LoadConfig() *Config {
 	}
 
 	if cfg.URL == "" {
-		cfg.URL = "https://ljoq4kni2bel7c2hab7dpdk45y.appsync-api.us-east-2.amazonaws.com/graphql"
+		cfg.URL = "https://wx5qrnzgmbfs7parlmpiuetigi.appsync-api.us-east-2.amazonaws.com/graphql"
 	}
 	if cfg.Token == "" {
 		cfg.Token = "jwt token"
