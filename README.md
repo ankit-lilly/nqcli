@@ -38,6 +38,23 @@ make build
 
 Set `VERSION=vX.Y.Z` when running `make build` to embed a custom version string in the binary.
 
+## Development
+
+Run the test suite locally with the standard Go tooling:
+
+```bash
+make test
+```
+
+For the documentation-style output provided by [`gotestdox`](https://github.com/bitfield/gotestdox), install the pinned toolchain dependency once and then invoke the dedicated target:
+
+```bash
+make tools   # installs tools defined in tools/tools.go (via go generate ./tools)
+make testdox # runs gotestdox ./...
+```
+
+The `tools/tools.go` file records CLI-only dependencies (guarded by the `tools` build tag) so the exact versions are captured in `go.mod`. Running `make tools` (or directly `go generate ./tools`) ensures those binaries are installed in your `$GOBIN`.
+
 ## Configuration
 
 `nqcli` reads configuration from environment variables and (optionally) a `.env` file. Pass `--env-file /path/to/file` to the CLI or `server` subcommand to load a specific file. When the flag is omitted the tool looks for `.env` in the current directory and then falls back to `~/.env`.
