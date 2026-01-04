@@ -88,8 +88,8 @@ func newLoginCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&secretName, "secret-name", secretName, "AWS Secrets Manager secret that holds the API auth credentials.")
-	cmd.Flags().StringVar(&awsProfile, "aws-profile", "", "Optional AWS shared config profile to use for authentication.")
-	cmd.Flags().StringVar(&awsRegion, "aws-region", "", "Override the AWS region when loading credentials.")
+	cmd.Flags().StringVar(&awsProfile, "aws-profile", "dsoadev", "Optional AWS shared config profile to use for authentication.")
+	cmd.Flags().StringVar(&awsRegion, "aws-region", "us-east-2", "Override the AWS region when loading credentials.")
 	cmd.Flags().BoolVar(&noWrite, "no-write", false, "Do not write NEPTUNE_TOKEN to an env file.")
 	cmd.Flags().BoolVar(&printToken, "print-token", false, "Print the raw access token to stdout (use with caution).")
 
