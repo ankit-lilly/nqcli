@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/ankit-lilly/nqcli/internal/config"
 	neptune "github.com/ankit-lilly/nqcli/internal/gq"
 
+	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
@@ -20,13 +22,36 @@ type queryService interface {
 
 var (
 	envFilePath string
+	awsProfile  string
+	awsRegion   string
 	version     = "dev"
 )
 
-var newQueryService = func() queryService {
+var newQueryService = func(ctx context.Context) (queryService, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	cfg := config.LoadConfig()
-	neptuneClient := neptune.NewClient(cfg)
-	return app.NewAppService(neptuneClient)
+
+	cfgOpts := []func(*awscfg.LoadOptions) error{}
+	if awsProfile != "" {
+		cfgOpts = append(cfgOpts, awscfg.WithSharedConfigProfile(awsProfile))
+	}
+	if awsRegion != "" {
+		cfgOpts = append(cfgOpts, awscfg.WithRegion(awsRegion))
+	}
+
+	awsCfg, err := awscfg.LoadDefaultConfig(ctx, cfgOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("load AWS configuration: %w", err)
+	}
+
+	neptuneClient, err := neptune.NewClient(cfg, awsCfg)
+	if err != nil {
+		return nil, err
+	}
+	return app.NewAppService(neptuneClient), nil
 }
 
 var rootCmd = &cobra.Command{
@@ -66,7 +91,10 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		appService := newQueryService()
+		appService, err := newQueryService(cmd.Context())
+		if err != nil {
+			return err
+		}
 
 		l := log.NewWithOptions(os.Stderr, log.Options{
 			ReportTimestamp: false,
@@ -96,6 +124,7 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -109,6 +138,18 @@ func init() {
 		"env-file",
 		"",
 		"Path to a .env file to load before executing (defaults to ./ .env, then ~/.env).",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&awsProfile,
+		"aws-profile",
+		"",
+		"Optional AWS shared config profile to use for authentication.",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&awsRegion,
+		"aws-region",
+		"",
+		"Override the AWS region when signing AppSync requests.",
 	)
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {

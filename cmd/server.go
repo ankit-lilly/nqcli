@@ -30,7 +30,10 @@ func newServerCommand() *cobra.Command {
 				return err
 			}
 
-			appService := newQueryService()
+			appService, err := newQueryService(cmd.Context())
+			if err != nil {
+				return err
+			}
 
 			logger := log.NewWithOptions(os.Stderr, log.Options{
 				ReportTimestamp: true,

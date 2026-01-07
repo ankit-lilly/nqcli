@@ -27,7 +27,6 @@ WORKDIR /app
 COPY --from=builder /out/nq /app/nq
 
 ENV NEPTUNE_URL=""
-ENV NEPTUNE_TOKEN=""
 
 EXPOSE 8080
 

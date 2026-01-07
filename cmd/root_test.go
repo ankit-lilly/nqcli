@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"testing"
 )
@@ -29,7 +30,7 @@ func (s *spyQueryService) ExecuteQuery(query, queryType string) (string, string,
 func TestRootCommandInlineQueryCallsExecuteQuery(t *testing.T) {
 	spy := &spyQueryService{}
 	origFactory := newQueryService
-	newQueryService = func() queryService { return spy }
+	newQueryService = func(ctx context.Context) (queryService, error) { return spy, nil }
 	t.Cleanup(func() {
 		newQueryService = origFactory
 		rootCmd.SetArgs(nil)
@@ -58,7 +59,7 @@ func TestRootCommandInlineQueryCallsExecuteQuery(t *testing.T) {
 func TestRootCommandFileArgumentCallsExecute(t *testing.T) {
 	spy := &spyQueryService{}
 	origFactory := newQueryService
-	newQueryService = func() queryService { return spy }
+	newQueryService = func(ctx context.Context) (queryService, error) { return spy, nil }
 	t.Cleanup(func() {
 		newQueryService = origFactory
 		rootCmd.SetArgs(nil)

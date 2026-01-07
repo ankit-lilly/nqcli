@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,8 +11,7 @@ import (
 )
 
 type Config struct {
-	URL   string
-	Token string
+	URL string
 }
 
 var (
@@ -108,19 +106,11 @@ func LoadConfig() *Config {
 	ensureDefaultEnvLoaded()
 
 	cfg := &Config{
-		URL:   os.Getenv("NEPTUNE_URL"),
-		Token: os.Getenv("NEPTUNE_TOKEN"),
+		URL: os.Getenv("NEPTUNE_URL"),
 	}
 
 	if cfg.URL == "" {
 		cfg.URL = "https://rqhlqaisn5c6to736svujsowwm.appsync-api.us-east-2.amazonaws.com/graphql"
-	}
-	if cfg.Token == "" {
-		cfg.Token = "jwt token"
-	}
-
-	if cfg.Token == "jwt token" {
-		log.Println("Warning: Using placeholder 'jwt token'. Set NEPTUNE_TOKEN environment variable.")
 	}
 
 	return cfg
