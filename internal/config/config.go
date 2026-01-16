@@ -11,7 +11,9 @@ import (
 )
 
 type Config struct {
-	URL string
+	URL                string
+	AppSyncAPIName     string
+	AppSyncAPIID       string
 }
 
 var (
@@ -106,11 +108,9 @@ func LoadConfig() *Config {
 	ensureDefaultEnvLoaded()
 
 	cfg := &Config{
-		URL: os.Getenv("NEPTUNE_URL"),
-	}
-
-	if cfg.URL == "" {
-		cfg.URL = "https://rqhlqaisn5c6to736svujsowwm.appsync-api.us-east-2.amazonaws.com/graphql"
+		URL:                os.Getenv("NEPTUNE_URL"),
+		AppSyncAPIName:     strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_NAME")),
+		AppSyncAPIID:       strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_ID")),
 	}
 
 	return cfg

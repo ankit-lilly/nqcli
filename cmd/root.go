@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ankit-lilly/nqcli/internal/app"
+	"github.com/ankit-lilly/nqcli/internal/appsyncdiscovery"
 	"github.com/ankit-lilly/nqcli/internal/config"
 	neptune "github.com/ankit-lilly/nqcli/internal/gq"
 
@@ -45,6 +46,26 @@ var newQueryService = func(ctx context.Context) (queryService, error) {
 	awsCfg, err := awscfg.LoadDefaultConfig(ctx, cfgOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("load AWS configuration: %w", err)
+	}
+
+	if cfg.URL == "" {
+		profileName := awsProfile
+		if profileName == "" {
+			profileName = os.Getenv("AWS_PROFILE")
+		}
+		url, err := appsyncdiscovery.ResolveAppSyncURL(ctx, awsCfg, appsyncdiscovery.ResolveOptions{
+			Profile:     profileName,
+			APIName:     cfg.AppSyncAPIName,
+			APIID:       cfg.AppSyncAPIID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		cfg.URL = url
+	}
+
+	if cfg.URL == "" {
+		return nil, fmt.Errorf("appsync endpoint is required; set NEPTUNE_URL or configure discovery")
 	}
 
 	neptuneClient, err := neptune.NewClient(cfg, awsCfg)

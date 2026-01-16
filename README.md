@@ -59,9 +59,16 @@ The `tools/tools.go` file records CLI-only dependencies (guarded by the `tools` 
 
 `nqcli` reads configuration from environment variables and (optionally) a `.env` file. Pass `--env-file /path/to/file` to the CLI or `server` subcommand to load a specific file. When the flag is omitted the tool looks for `.env` in the current directory and then falls back to `~/.env`.
 
-| Variable      | Description                                 | Default                               |
-| ------------- | ------------------------------------------- | ------------------------------------- |
-| `NEPTUNE_URL` | AppSync GraphQL endpoint                    | Hard-coded demo URL (replace in prod) |
+| Variable                     | Description                                                                 | Default   |
+| ---------------------------- | --------------------------------------------------------------------------- | --------- |
+| `NEPTUNE_URL`                | AppSync GraphQL endpoint (overrides discovery)                              |           |
+| `NEPTUNE_APPSYNC_API_NAME`   | AppSync API name to select when discovering the endpoint                    |           |
+| `NEPTUNE_APPSYNC_API_ID`     | AppSync API ID to select when discovering the endpoint                      |           |
+
+When `NEPTUNE_URL` is unset, the CLI uses `appsync:ListGraphqlApis` for the
+current `--aws-profile` (or `AWS_PROFILE`) and region to resolve the URL,
+caching the result in `~/.cache/nqcli/appsync_cache.json` (keyed by
+profile+region). Delete the cache file to force a refresh.
 
 Example `.env` file:
 
@@ -69,7 +76,8 @@ Example `.env` file:
 NEPTUNE_URL=https://your-appsync-id.appsync-api.us-east-1.amazonaws.com/graphql
 ```
 
-> **Note:** The defaults are placeholders. Provide real values before running queries against production Neptune instances.
+> **Note:** If multiple AppSync APIs exist in the account/region, set
+> `NEPTUNE_APPSYNC_API_NAME` or `NEPTUNE_APPSYNC_API_ID` to disambiguate.
 
 ### IAM authentication
 
