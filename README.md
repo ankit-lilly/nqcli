@@ -75,11 +75,21 @@ If `--type` is omitted the command defaults to `gremlin` and validates that the 
 
 Use `--aws-profile` or `--aws-region` to control which AWS credentials are used when signing requests.
 
+## Web UI
+
+```bash
+nq server --addr :8080
+```
+
+The server launches an interactive web UI at the provided address (default `0.0.0.0:8080`).
+
 ## Screenshots
 
 Additional examples live under `./screenshots`:
 
 ![CLI output](./screenshots/cli-screenshot.png)
+![Web UI dark mode](./screenshots/dark-web.png)
+![Web UI light mode](./screenshots/light-web.png)
 
 ## Limitations
 
