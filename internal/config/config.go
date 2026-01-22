@@ -11,9 +11,9 @@ import (
 )
 
 type Config struct {
-	URL            string
-	AppSyncAPIName string
-	AppSyncAPIID   string
+	URL                string
+	AppSyncAPIName     string
+	AppSyncAPIID       string
 }
 
 var (
@@ -108,9 +108,9 @@ func LoadConfig() *Config {
 	ensureDefaultEnvLoaded()
 
 	cfg := &Config{
-		URL:            os.Getenv("NEPTUNE_URL"),
-		AppSyncAPIName: strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_NAME")),
-		AppSyncAPIID:   strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_ID")),
+		URL:                os.Getenv("NEPTUNE_URL"),
+		AppSyncAPIName:     strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_NAME")),
+		AppSyncAPIID:       strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_ID")),
 	}
 
 	return cfg

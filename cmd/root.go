@@ -54,9 +54,9 @@ var newQueryService = func(ctx context.Context) (queryService, error) {
 			profileName = os.Getenv("AWS_PROFILE")
 		}
 		url, err := appsyncdiscovery.ResolveAppSyncURL(ctx, awsCfg, appsyncdiscovery.ResolveOptions{
-			Profile: profileName,
-			APIName: cfg.AppSyncAPIName,
-			APIID:   cfg.AppSyncAPIID,
+			Profile:     profileName,
+			APIName:     cfg.AppSyncAPIName,
+			APIID:       cfg.AppSyncAPIID,
 		})
 		if err != nil {
 			return nil, err
