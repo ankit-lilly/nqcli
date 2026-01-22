@@ -75,6 +75,24 @@ If `--type` is omitted the command defaults to `gremlin` and validates that the 
 
 Use `--aws-profile` or `--aws-region` to control which AWS credentials are used when signing requests.
 
+## Shell Completions
+
+Generate completion scripts for your shell with the `completion` subcommand:
+
+```bash
+# Bash
+source <(nq completion bash)
+
+# Zsh
+source <(nq completion zsh)
+
+# Fish
+nq completion fish | source
+
+# PowerShell
+nq completion powershell | Out-String | Invoke-Expression
+```
+
 ## Web UI
 
 ```bash
