@@ -1,3 +1,4 @@
+version: 2
 before:
   hooks:
     - go test ./...
@@ -20,17 +21,14 @@ builds:
 
 archives:
   - id: nqcli-archive
-    builds:
-      - nqcli
-    format: tar.gz
+    formats: 
+     - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats: 
+         - zip
     files:
       - README.md
-
-checksum:
-  name_template: "checksums.txt"
 
 changelog:
   sort: asc
