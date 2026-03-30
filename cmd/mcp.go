@@ -63,7 +63,7 @@ func newMcpCommand() *cobra.Command {
 				server,
 				&mcp.Tool{
 					Name:        "get_graph_schema",
-					Description: "Discovers vertex labels and their counts to help understand the graph structure.",
+					Description: "Returns the embedded graph schema (default). Set NQ_MCP_SCHEMA_SOURCE=dynamic to run live discovery (labels, properties, edge patterns, counts, enums).",
 				},
 				func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
 					prettyJSON, execErr := buildGraphSchema(ctx, appService)
