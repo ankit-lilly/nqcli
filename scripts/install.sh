@@ -47,20 +47,52 @@ detect_platform() {
   export TARGET_OS TARGET_ARCH
 }
 
-select_asset_from_checksums() {
-  local downloads_base checksums_url checksum_pattern checksum_content
+resolve_release_tag() {
   if [[ "${VERSION}" == "latest" ]]; then
-    downloads_base="https://github.com/${REPO}/releases/latest/download"
+    RELEASE_TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest") \
+      || err "failed to resolve latest release tag for ${REPO}"
+    RELEASE_TAG="${RELEASE_TAG##*/}"
   else
-    downloads_base="https://github.com/${REPO}/releases/download/${VERSION}"
+    RELEASE_TAG="${VERSION}"
   fi
 
-  checksums_url="${downloads_base}/checksums.txt"
-  log "Using checksums.txt at ${checksums_url} to determine release asset"
-  checksum_content=$(curl -fsSL "${checksums_url}") || err "failed to download ${checksums_url}"
-  if [[ -z "${checksum_content}" ]]; then
-    err "checksums.txt was empty at ${checksums_url}"
+  if [[ -z "${RELEASE_TAG}" ]]; then
+    err "could not determine release tag"
   fi
+
+  export RELEASE_TAG
+}
+
+fetch_checksums() {
+  local downloads_base candidate repo_name release_version
+
+  downloads_base="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
+  repo_name="${REPO##*/}"
+  release_version="${RELEASE_TAG#v}"
+
+  for candidate in \
+    "checksums.txt" \
+    "${repo_name}_${release_version}_checksums.txt"
+  do
+    checksums_url="${downloads_base}/${candidate}"
+    log "Trying checksum manifest at ${checksums_url}"
+    if checksum_content=$(curl -fsSL "${checksums_url}" 2>/dev/null); then
+      if [[ -n "${checksum_content}" ]]; then
+        log "Using checksum manifest ${candidate}"
+        export checksums_url checksum_content
+        return 0
+      fi
+    fi
+  done
+
+  err "failed to locate a checksum manifest for release ${RELEASE_TAG}"
+}
+
+select_asset_from_checksums() {
+  local downloads_base checksum_pattern
+
+  downloads_base="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
+  fetch_checksums
 
   case "${TARGET_OS}" in
     darwin|linux)
@@ -150,6 +182,7 @@ main() {
   require_cmd curl
   require_cmd install
   detect_platform
+  resolve_release_tag
   select_asset_from_checksums
   download_asset
   extract_binary
