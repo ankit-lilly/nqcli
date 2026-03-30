@@ -82,6 +82,43 @@ is one of the supported options.
 Use `--aws-profile` or `--aws-region` to control which AWS credentials are used when signing
 requests.
 
+## MCP Server (Go)
+
+You can run an MCP server directly from the `nq` binary:
+
+```bash
+nq mcp
+```
+
+This runs over stdio and is meant to be launched by an MCP client (Claude Desktop, Cursor, etc.).
+
+### Claude Desktop multi-environment config
+
+Configure separate MCP servers for each AWS environment so you can switch without restarting:
+
+```json
+{
+  "mcpServers": {
+    "neptune-dev": {
+      "command": "/absolute/path/to/nq",
+      "args": ["mcp"],
+      "env": {
+        "AWS_PROFILE": "dsoadev"
+      }
+    },
+    "neptune-qa": {
+      "command": "/absolute/path/to/nq",
+      "args": ["mcp"],
+      "env": {
+        "AWS_PROFILE": "dsoaqa"
+      }
+    }
+  }
+}
+```
+
+Set `NEPTUNE_URL` (or `AWS_REGION`) in the `env` block if you need to override endpoint discovery.
+
 ## Web UI
 
 ```bash
