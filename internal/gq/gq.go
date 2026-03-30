@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -72,14 +73,14 @@ func (c *Client) ExecuteQuery(query string, queryType string) (string, error) {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", c.cfg.URL, bytes.NewBuffer(jsonPayload))
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "POST", c.cfg.URL, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	ctx := context.Background()
 	creds, err := c.awsCfg.Credentials.Retrieve(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to load AWS credentials: %w", err)
@@ -108,10 +109,12 @@ func (c *Client) ExecuteQuery(query string, queryType string) (string, error) {
 		return "", fmt.Errorf("API returned status code %d", resp.StatusCode)
 	}
 
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
 
-	return buf.String(), nil
+	return string(body), nil
 }
 
 func regionFromURL(endpoint string) (string, error) {

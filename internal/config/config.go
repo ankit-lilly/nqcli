@@ -88,12 +88,12 @@ func expandPath(p string) (string, error) {
 		return "", fmt.Errorf("empty path")
 	}
 
-	if strings.HasPrefix(p, "~") {
+	if rest, ok := strings.CutPrefix(p, "~"); ok {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("cannot resolve home directory: %w", err)
 		}
-		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
+		p = filepath.Join(home, rest)
 	}
 	return filepath.Abs(p)
 }

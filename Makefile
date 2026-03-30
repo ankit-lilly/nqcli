@@ -24,4 +24,4 @@ testdox:
 
 .PHONY: tools
 tools:
-	@go generate ./tools
+	@go install github.com/bitfield/gotestdox/cmd/gotestdox

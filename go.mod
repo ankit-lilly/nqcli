@@ -6,7 +6,6 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.2
 	github.com/aws/aws-sdk-go-v2/config v1.32.10
 	github.com/aws/aws-sdk-go-v2/service/appsync v1.53.2
-	github.com/bitfield/gotestdox v0.2.2
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
 	github.com/joho/godotenv v1.5.1
@@ -53,4 +52,8 @@ require (
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
+)
+
+tool (
+	github.com/bitfield/gotestdox/cmd/gotestdox
 )
