@@ -91,6 +91,7 @@ nq mcp
 ```
 
 This runs over stdio and is meant to be launched by an MCP client (Claude Desktop, Cursor, etc.).
+See `nqcli/docs/mcp.md` for a short MCP primer tied to this repo.
 
 ### Claude Desktop multi-environment config
 
@@ -100,14 +101,14 @@ Configure separate MCP servers for each AWS environment so you can switch withou
 {
   "mcpServers": {
     "neptune-dev": {
-      "command": "/absolute/path/to/nq",
+      "command": "nq",
       "args": ["mcp"],
       "env": {
         "AWS_PROFILE": "dsoadev"
       }
     },
     "neptune-qa": {
-      "command": "/absolute/path/to/nq",
+      "command": "nq",
       "args": ["mcp"],
       "env": {
         "AWS_PROFILE": "dsoaqa"

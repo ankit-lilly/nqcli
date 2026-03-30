@@ -53,7 +53,7 @@ func newMcpCommand() *cobra.Command {
 				Version: version,
 			}, nil)
 
-			if err := mcp.AddTool(
+			mcp.AddTool(
 				server,
 				&mcp.Tool{
 					Name:        "run_gremlin_query",
@@ -76,11 +76,9 @@ func newMcpCommand() *cobra.Command {
 						},
 					}, nil, nil
 				},
-			); err != nil {
-				return err
-			}
+			)
 
-			if err := mcp.AddTool(
+			mcp.AddTool(
 				server,
 				&mcp.Tool{
 					Name:        "get_graph_schema",
@@ -99,9 +97,7 @@ func newMcpCommand() *cobra.Command {
 						},
 					}, nil, nil
 				},
-			); err != nil {
-				return err
-			}
+			)
 
 			return server.Run(cmd.Context(), &mcp.StdioTransport{})
 		},
