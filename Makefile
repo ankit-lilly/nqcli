@@ -20,7 +20,7 @@ test:
 
 .PHONY: testdox
 testdox:
-	@gotestdox ./...
+	@go tool github.com/bitfield/gotestdox/cmd/gotestdox ./...
 
 .PHONY: tools
 tools:
