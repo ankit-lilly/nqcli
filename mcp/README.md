@@ -1,31 +1,6 @@
 # Neptune NQ MCP Server
 
-This is an MCP (Model Context Protocol) server that wraps your `nq` CLI tool. It allows AI agents like Claude to query your Neptune database using natural language by executing your `nq` binary behind the scenes.
-
-## Prerequisites
-
-1.  **Build your CLI**: Ensure the `nq` binary is built and in your system PATH.
-    ```bash
-    cd ..
-    make build
-    sudo cp nq /usr/local/bin/
-    ```
-2.  **Node.js**: Ensure you have Node.js 18+ installed.
-
-## Setup
-
-1.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
-2.  **Build the MCP server**:
-    ```bash
-    npm run build
-    ```
-
 ## Usage with Claude Desktop
-
-Add the following to your Claude Desktop configuration file (usually `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
 {
