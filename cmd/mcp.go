@@ -85,8 +85,7 @@ func newMcpCommand() *cobra.Command {
 					Description: "Discovers vertex labels and their counts to help understand the graph structure.",
 				},
 				func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
-					const schemaQuery = "g.V().groupCount().by(label)"
-					prettyJSON, _, execErr := appService.ExecuteQuery(schemaQuery, "gremlin")
+					prettyJSON, execErr := buildGraphSchema(ctx, appService)
 					if execErr != nil {
 						return nil, nil, execErr
 					}
