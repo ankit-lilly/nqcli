@@ -93,9 +93,7 @@ func expandPath(p string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("cannot resolve home directory: %w", err)
 		}
-		rest = strings.TrimPrefix(rest, string(filepath.Separator))
-		rest = strings.TrimPrefix(rest, "/")
-		rest = strings.TrimPrefix(rest, "\\")
+		rest = strings.TrimLeft(rest, `/\`)
 		p = filepath.Join(home, rest)
 	}
 	return filepath.Abs(p)

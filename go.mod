@@ -27,6 +27,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.7 // indirect
 	github.com/aws/smithy-go v1.24.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
@@ -54,6 +55,4 @@ require (
 	golang.org/x/text v0.11.0 // indirect
 )
 
-tool (
-	github.com/bitfield/gotestdox/cmd/gotestdox
-)
+tool github.com/bitfield/gotestdox/cmd/gotestdox
