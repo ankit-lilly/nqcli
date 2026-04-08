@@ -2,9 +2,9 @@
 <!DOCTYPE html>
 <html lang="en">
   {{template "head" .}}
-  <body>
-    <div class="app-shell">
-      <main class="app-panel">
+  <body class="min-h-screen bg-background text-foreground antialiased">
+    <div class="app-shell mx-auto flex min-h-screen w-full max-w-5xl items-center px-3 py-4 sm:px-6 lg:px-8">
+      <main class="app-panel w-full space-y-3 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm sm:p-4">
         {{template "page-header" .}}
         {{template "alert" .}}
         {{template "query-form" .}}

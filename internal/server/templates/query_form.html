@@ -1,23 +1,23 @@
 {{define "query-form"}}
-      <section class="panel-section panel-section--form">
-        <form class="form" id="query-form" novalidate>
-          <fieldset>
-            <legend>Language</legend>
-            <label>
-              <select id="query-type" name="type">
+      <section class="panel-section panel-section--form rounded-lg border border-border bg-background p-3 shadow-sm">
+        <form class="form flex flex-col gap-3" id="query-form" novalidate>
+          <fieldset class="space-y-2">
+            <legend class="text-xs font-medium uppercase text-muted-foreground">Language</legend>
+            <label class="block">
+              <select id="query-type" name="type" class="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <option value="gremlin">Gremlin</option>
                 <option value="cypher">Cypher</option>
               </select>
             </label>
           </fieldset>
-          <fieldset>
-            <legend>Query</legend>
-            <label class="editor">
-              <textarea id="query-text" name="query" rows="10" placeholder="Enter your Gremlin or Cypher query here"></textarea>
-              <div class="highlight"></div>
+          <fieldset class="min-h-0 flex-1 space-y-2">
+            <legend class="text-xs font-medium uppercase text-muted-foreground">Query</legend>
+            <label class="editor block min-h-0 font-mono">
+              <textarea id="query-text" name="query" rows="10" placeholder="Enter your Gremlin or Cypher query here" class="min-h-[13rem] w-full resize-y rounded-md border border-input bg-background p-3 text-sm text-foreground shadow-sm transition placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"></textarea>
+              <div class="highlight rounded-md border border-input bg-muted p-3 text-sm"></div>
             </label>
           </fieldset>
-          <button type="submit" data-role="submit" class="button-fixed success">
+          <button type="submit" data-role="submit" class="button-fixed success inline-flex h-10 min-w-32 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50">
             Run
           </button>
         </form>

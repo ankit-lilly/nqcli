@@ -63,11 +63,14 @@ func (c *Client) ExecuteQuery(query string, queryType string) (string, error) {
 	variables.Input.Type = queryType
 	variables.Input.Query = query
 
+	return c.ExecuteGraphQL(`mutation ($input: NeptuneQuery!) { executeQuery(input: $input) }`, variables)
+}
+
+func (c *Client) ExecuteGraphQL(query string, variables any) (string, error) {
 	payload := GraphQLPayload{
-		Query:     `mutation ($input: NeptuneQuery!) { executeQuery(input: $input) }`,
+		Query:     query,
 		Variables: variables,
 	}
-
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)

@@ -28,7 +28,7 @@ var (
 	version     = "dev"
 )
 
-var newQueryService = func(ctx context.Context) (queryService, error) {
+var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -68,7 +68,11 @@ var newQueryService = func(ctx context.Context) (queryService, error) {
 		return nil, fmt.Errorf("appsync endpoint is required; set NEPTUNE_URL or configure discovery")
 	}
 
-	neptuneClient, err := neptune.NewClient(cfg, awsCfg)
+	return neptune.NewClient(cfg, awsCfg)
+}
+
+var newQueryService = func(ctx context.Context) (queryService, error) {
+	neptuneClient, err := newGQLClient(ctx)
 	if err != nil {
 		return nil, err
 	}

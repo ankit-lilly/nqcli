@@ -1,9 +1,9 @@
 {{define "query-result"}}
-      <section id="result" class="panel-section panel-section--result" aria-live="polite">
-        <header class="result-header">
-          <h2> Output </h2>
-          <button type="button" data-role="copy" class="button-fixed copy-button success">Copy</button>
+      <section id="result" class="panel-section panel-section--result rounded-lg border border-border bg-background p-3 shadow-sm" aria-live="polite">
+        <header class="result-header flex items-center justify-between gap-3">
+          <h2 class="text-xs font-medium uppercase text-muted-foreground">Output</h2>
+          <button type="button" data-role="copy" class="button-fixed copy-button success inline-flex h-9 min-w-24 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">Copy</button>
         </header>
-        <pre><code class="language-json" id="result-content">[]</code></pre>
+        <pre class="rounded-md border border-border bg-muted shadow-sm"><code class="language-json font-mono text-sm" id="result-content">[]</code></pre>
       </section>
 {{end}}
