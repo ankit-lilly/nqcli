@@ -100,14 +100,14 @@ Configure separate MCP servers for each AWS environment so you can switch withou
 ```json
 {
   "mcpServers": {
-    "neptune-dev": {
+    "sdr-dev": {
       "command": "nq",
       "args": ["mcp"],
       "env": {
         "AWS_PROFILE": "dsoadev"
       }
     },
-    "neptune-qa": {
+    "sdr-qa": {
       "command": "nq",
       "args": ["mcp"],
       "env": {
@@ -118,6 +118,8 @@ Configure separate MCP servers for each AWS environment so you can switch withou
 }
 ```
 
+Note that `dsoadev` and `dsoaqa` are names that I've given my aws cli sso profiles. Yours maybe be different.
+
 Set `NEPTUNE_URL` (or `AWS_REGION`) in the `env` block if you need to override endpoint discovery.
 
 ## Web UI
@@ -127,14 +129,6 @@ nq server --addr :8080
 ```
 
 The server launches an interactive web UI at the provided address (default `0.0.0.0:8080`).
-
-## Screenshots
-
-Additional examples live under `./screenshots`:
-
-![CLI output](./screenshots/cli-screenshot.png)
-![Web UI dark mode](./screenshots/dark-web.png)
-![Web UI light mode](./screenshots/light-web.png)
 
 ## Limitations
 
