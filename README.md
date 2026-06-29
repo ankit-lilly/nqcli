@@ -142,24 +142,30 @@ The server launches an interactive web UI at the provided address (default `0.0.
 
 ## AWS SSO Setup
 
-To use `--aws-profile` (or `AWS_PROFILE`) you first need to configure an AWS SSO profile locally. These steps use the Lilly AWS portal.
+To use `--aws-profile` (or `AWS_PROFILE`) you first need to configure an AWS SSO profile locally.
 
 **Prerequisites:** AWS CLI v2 — confirm with `aws --version`.
 
-### 1. Configure the profile
+### 1. Find your SSO start URL and region
+
+1. Go to [https://lilly-aws-login.awsapps.com/start](https://lilly-aws-login.awsapps.com/start) and sign in with your **CA account**.
+2. You'll see a list of AWS accounts you have access to. Expand the account you want to use and click **Access keys** next to the role.
+3. In the dialog that opens, note the **SSO start URL** and **SSO region** shown under "AWS IAM Identity Center credentials (Recommended)" — you'll need these in the next step.
+
+### 2. Configure the profile
 
 ```bash
 aws configure sso
 ```
 
-Fill in the prompts:
+When prompted, enter the values from the Access keys dialog:
 
 | Prompt | Value |
 |---|---|
-| SSO start URL | `https://lilly-aws-login.awsapps.com/start` |
-| SSO region | `us-east-1` |
+| SSO start URL | the URL from the Access keys dialog (e.g. `https://identitycenter.amazonaws.com/ssoins-…`) |
+| SSO region | the region from the Access keys dialog (e.g. `us-east-2`) |
 
-A browser window opens — sign in with your **CA account** and grant access. The CLI then lists the accounts and roles you have access to; select the one you want to query. Finish the remaining prompts:
+A browser window opens to complete authentication. The CLI then asks for a few more settings:
 
 | Prompt | Example value |
 |---|---|
@@ -167,7 +173,7 @@ A browser window opens — sign in with your **CA account** and grant access. Th
 | CLI output format | `json` |
 | CLI profile name | `dsoadev` (pick something memorable) |
 
-### 2. Log in
+### 3. Log in
 
 ```bash
 aws sso login --profile dsoadev
@@ -175,7 +181,7 @@ aws sso login --profile dsoadev
 
 This opens a browser to complete the SSO flow. You need to do this once per session (sessions last ~8 hours).
 
-### 3. Run queries
+### 4. Run queries
 
 ```bash
 nq 'g.V()' --aws-profile dsoadev
