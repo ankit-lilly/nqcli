@@ -26,11 +26,17 @@ do not need a `.env` because the AppSync URL is discovered automatically from th
 profile. If you do want a file, pass `--env-file /path/to/file` to the CLI. When omitted the
 tool looks for `.env` in the current directory and then falls back to `~/.env`.
 
-| Variable                     | Description                                              | Default   |
-| ---------------------------- | ---------------------------------------------------------| --------- |
-| `NEPTUNE_URL`                | AppSync GraphQL endpoint (overrides discovery)           |           |
-| `NEPTUNE_APPSYNC_API_NAME`   | AppSync API name to select when discovering the endpoint |           |
-| `NEPTUNE_APPSYNC_API_ID`     | AppSync API ID to select when discovering the endpoint   |           |
+```sh
+┌───────────────────────────────┬────────────────────────────────────────────────────────────┐
+│ Variable                      │  Description                                               │
+├───────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ `NEPTUNE_URL`                 │  AppSync GraphQL endpoint (overrides discovery)            │
+├───────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ `NEPTUNE_APPSYNC_API_NAME`    │  AppSync API name to select when discovering the endpoint  │
+├───────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ `NEPTUNE_APPSYNC_API_ID`      │  AppSync API ID to select when discovering the endpoint    │
+└───────────────────────────────┴────────────────────────────────────────────────────────────┘
+```
 
 When `NEPTUNE_URL` is unset, the CLI calls `appsync:ListGraphqlApis` for the
 current `--aws-profile` (or `AWS_PROFILE`) and region to resolve the URL. The
@@ -58,19 +64,19 @@ Once environment variables are set, use the binary directly:
 
 ```bash
 # Pipe a Gremlin query (default type)
-echo 'g.V().hasLabel("Person")' | nq
+echo 'g.V().hasLabel("Person")' | nq --aws-profile dsoadev
 
 # Or just pass in the query as argument:
 
-nq 'g.V().hasLabel("Person")'
+nq 'g.V().hasLabel("Person")' --aws-profile dsoadev
 
 # Pipe a Cypher query
-echo 'MATCH (n) RETURN n LIMIT 5' | nq --type cypher
+echo 'MATCH (n) RETURN n LIMIT 5' | nq --type cypher --aws-profile dsoadev
 
-nq --type cyper 'MATCH (s:Study) return s.name'
+nq --type cypher 'MATCH (s:Study) return s.name' --aws-profile dsoadev
 
 # Execute from a file
-nq path/to/query.gql --type gremlin
+nq path/to/query.gql --type gremlin --aws-profile dsoadev
 
 # Check the installed version
 nq --version
@@ -133,3 +139,46 @@ The server launches an interactive web UI at the provided address (default `0.0.
 ## Limitations
 
 - Only Gremlin and Cypher queries are supported.
+
+## AWS SSO Setup
+
+To use `--aws-profile` (or `AWS_PROFILE`) you first need to configure an AWS SSO profile locally. These steps use the Lilly AWS portal.
+
+**Prerequisites:** AWS CLI v2 — confirm with `aws --version`.
+
+### 1. Configure the profile
+
+```bash
+aws configure sso
+```
+
+Fill in the prompts:
+
+| Prompt | Value |
+|---|---|
+| SSO start URL | `https://lilly-aws-login.awsapps.com/start` |
+| SSO region | `us-east-1` |
+
+A browser window opens — sign in with your **CA account** and grant access. The CLI then lists the accounts and roles you have access to; select the one you want to query. Finish the remaining prompts:
+
+| Prompt | Example value |
+|---|---|
+| CLI default region | `us-east-1` |
+| CLI output format | `json` |
+| CLI profile name | `dsoadev` (pick something memorable) |
+
+### 2. Log in
+
+```bash
+aws sso login --profile dsoadev
+```
+
+This opens a browser to complete the SSO flow. You need to do this once per session (sessions last ~8 hours).
+
+### 3. Run queries
+
+```bash
+nq 'g.V()' --aws-profile dsoadev
+```
+
+When your session expires just run `aws sso login --profile <name>` again.
