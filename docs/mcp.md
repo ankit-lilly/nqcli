@@ -1,7 +1,7 @@
 ## MCP Primer for `nq`
 
-This document is a short, practical tutorial for teams new to the Model Context Protocol (MCP), tied directly to how
-`nq mcp` works in this repo.
+This document is a short, practical tutorial for teams new to the Model Context Protocol (MCP), tied directly to how `nq
+mcp` works in this repo.
 
 ### What MCP is (in one paragraph)
 
@@ -12,6 +12,7 @@ standard JSON-RPC based exchange, while the transport layer can be local process
 ### Core roles in MCP
 
 MCP uses a client-server model with three roles:
+
 - MCP Host: the AI application (Claude Desktop, Cursor, etc.) that manages connections.
 - MCP Client: the per-server connection object created by the host.
 - MCP Server: a program that exposes capabilities (tools, resources, prompts).

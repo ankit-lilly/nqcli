@@ -48,6 +48,11 @@ var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 		return nil, fmt.Errorf("load AWS configuration: %w", err)
 	}
 
+	// Fallback: if no region from flag or SDK chain, default to us-east-2.
+	if awsCfg.Region == "" {
+		awsCfg.Region = "us-east-2"
+	}
+
 	if cfg.URL == "" {
 		profileName := awsProfile
 		if profileName == "" {
