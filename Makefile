@@ -1,6 +1,6 @@
 VERSION ?= dev
 LDFLAGS = -s -w -X github.com/ankit-lilly/nqcli/cmd.version=$(VERSION)
-BUILD_FLAGS = -ldflags="$(LDFLAGS)"
+BUILD_FLAGS = -trimpath -gcflags="all=-l" -ldflags="$(LDFLAGS)"
 
 .PHONY: build
 build:

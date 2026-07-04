@@ -9,6 +9,10 @@ builds:
     binary: nq
     env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    gcflags:
+      - all=-l
     ldflags:
       - -s -w -X github.com/ankit-lilly/nqcli/cmd.version={{ .Version }}
     goos:
