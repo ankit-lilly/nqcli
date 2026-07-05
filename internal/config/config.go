@@ -7,9 +7,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
 )
 
+// Config holds the application configuration loaded from environment variables.
 type Config struct {
 	URL            string
 	AppSyncAPIName string
@@ -101,10 +103,14 @@ func expandPath(p string) (string, error) {
 
 func ensureDefaultEnvLoaded() {
 	defaultEnvOnce.Do(func() {
-		_ = LoadEnvironment("")
+		if err := LoadEnvironment(""); err != nil {
+			log.Warn("failed to load default .env file", "error", err)
+		}
 	})
 }
 
+// LoadConfig returns a Config populated from environment variables. It ensures
+// the default .env file is loaded first if not already done.
 func LoadConfig() *Config {
 	ensureDefaultEnvLoaded()
 

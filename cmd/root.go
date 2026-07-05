@@ -18,7 +18,9 @@ import (
 
 type queryService interface {
 	Execute(string, string) (string, string, error)
+	ExecuteCtx(context.Context, string, string) (string, string, error)
 	ExecuteQuery(string, string) (string, string, error)
+	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
 }
 
 var (
@@ -136,9 +138,9 @@ var rootCmd = &cobra.Command{
 		)
 
 		if inlineQuery != "" {
-			prettyJSON, _, execErr = appService.ExecuteQuery(inlineQuery, queryType)
+			prettyJSON, _, execErr = appService.ExecuteQueryCtx(cmd.Context(), inlineQuery, queryType)
 		} else {
-			prettyJSON, _, execErr = appService.Execute(queryFile, queryType)
+			prettyJSON, _, execErr = appService.ExecuteCtx(cmd.Context(), queryFile, queryType)
 		}
 		if execErr != nil {
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Bold(true)
@@ -151,6 +153,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Execute runs the root command and exits with code 1 on failure.
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {

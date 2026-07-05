@@ -251,7 +251,7 @@ type propertyInfo struct {
 	SampleValues []any  `json:"sample_values,omitempty"`
 }
 
-func buildGraphSchema(_ context.Context, appService queryService) (string, error) {
+func buildGraphSchema(ctx context.Context, appService queryService) (string, error) {
 	staticSchema := strings.TrimSpace(staticSchemaJSON)
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv(schemaSourceEnvVar)))
 	if mode == "" {
@@ -262,7 +262,7 @@ func buildGraphSchema(_ context.Context, appService queryService) (string, error
 		return staticSchema, nil
 	}
 
-	dynamicSchema, err := discoverGraphSchema(appService)
+	dynamicSchema, err := discoverGraphSchema(ctx, appService)
 	if err == nil {
 		payload, marshalErr := json.MarshalIndent(dynamicSchema, "", "  ")
 		if marshalErr != nil {
@@ -278,16 +278,16 @@ func buildGraphSchema(_ context.Context, appService queryService) (string, error
 	return "", err
 }
 
-func discoverGraphSchema(appService queryService) (*graphSchema, error) {
-	vertexLabels, err := queryStringList(appService, "g.V().label().dedup()")
+func discoverGraphSchema(ctx context.Context, appService queryService) (*graphSchema, error) {
+	vertexLabels, err := queryStringList(ctx, appService, "g.V().label().dedup()")
 	if err != nil {
 		return nil, fmt.Errorf("discover vertex labels: %w", err)
 	}
-	edgeLabels, err := queryStringList(appService, "g.E().label().dedup()")
+	edgeLabels, err := queryStringList(ctx, appService, "g.E().label().dedup()")
 	if err != nil {
 		return nil, fmt.Errorf("discover edge labels: %w", err)
 	}
-	edgePatterns, err := queryEdgePatterns(appService)
+	edgePatterns, err := queryEdgePatterns(ctx, appService)
 	if err != nil {
 		return nil, fmt.Errorf("discover edge patterns: %w", err)
 	}
@@ -298,17 +298,19 @@ func discoverGraphSchema(appService queryService) (*graphSchema, error) {
 	vertices := make(map[string]labelSchema, len(vertexLabels))
 	for _, label := range vertexLabels {
 		props, propErr := queryStringList(
+			ctx,
 			appService,
 			fmt.Sprintf("g.V().hasLabel('%s').properties().key().dedup()", escapeGremlinString(label)),
 		)
 		if propErr != nil {
 			return nil, fmt.Errorf("discover vertex properties for %s: %w", label, propErr)
 		}
-		propInfos, enumErr := buildPropertyInfos(appService, true, label, props)
+		propInfos, enumErr := buildPropertyInfos(ctx, appService, true, label, props)
 		if enumErr != nil {
 			return nil, fmt.Errorf("analyze vertex properties for %s: %w", label, enumErr)
 		}
 		count, countErr := queryCount(
+			ctx,
 			appService,
 			fmt.Sprintf("g.V().hasLabel('%s').count()", escapeGremlinString(label)),
 		)
@@ -324,17 +326,19 @@ func discoverGraphSchema(appService queryService) (*graphSchema, error) {
 	edges := make(map[string]labelSchema, len(edgeLabels))
 	for _, label := range edgeLabels {
 		props, propErr := queryStringList(
+			ctx,
 			appService,
 			fmt.Sprintf("g.E().hasLabel('%s').properties().key().dedup()", escapeGremlinString(label)),
 		)
 		if propErr != nil {
 			return nil, fmt.Errorf("discover edge properties for %s: %w", label, propErr)
 		}
-		propInfos, enumErr := buildPropertyInfos(appService, false, label, props)
+		propInfos, enumErr := buildPropertyInfos(ctx, appService, false, label, props)
 		if enumErr != nil {
 			return nil, fmt.Errorf("analyze edge properties for %s: %w", label, enumErr)
 		}
 		count, countErr := queryCount(
+			ctx,
 			appService,
 			fmt.Sprintf("g.E().hasLabel('%s').count()", escapeGremlinString(label)),
 		)
@@ -358,21 +362,18 @@ func discoverGraphSchema(appService queryService) (*graphSchema, error) {
 	}, nil
 }
 
-func buildPropertyInfos(appService queryService, isVertex bool, label string, props []string) ([]propertyInfo, error) {
+func buildPropertyInfos(ctx context.Context, appService queryService, isVertex bool, label string, props []string) ([]propertyInfo, error) {
 	slices.Sort(props)
 	infos := make([]propertyInfo, 0, len(props))
 	for _, prop := range props {
-		values, err := queryEnumCandidates(appService, isVertex, label, prop)
+		values, err := queryEnumCandidates(ctx, appService, isVertex, label, prop)
 		if err != nil {
 			return nil, err
 		}
 
 		info := propertyInfo{Name: prop}
 		if len(values) > 0 {
-			sampleLimit := enumSampleValueLimit
-			if len(values) < sampleLimit {
-				sampleLimit = len(values)
-			}
+			sampleLimit := min(enumSampleValueLimit, len(values))
 			info.SampleValues = values[:sampleLimit]
 		}
 		if len(values) > 0 && len(values) <= enumReturnLimit {
@@ -383,7 +384,7 @@ func buildPropertyInfos(appService queryService, isVertex bool, label string, pr
 	return infos, nil
 }
 
-func queryEnumCandidates(appService queryService, isVertex bool, label, prop string) ([]any, error) {
+func queryEnumCandidates(ctx context.Context, appService queryService, isVertex bool, label, prop string) ([]any, error) {
 	prefix := "g.V()"
 	if !isVertex {
 		prefix = "g.E()"
@@ -395,7 +396,7 @@ func queryEnumCandidates(appService queryService, isVertex bool, label, prop str
 		escapeGremlinString(prop),
 		enumSampleLimit+1,
 	)
-	values, err := queryAnyList(appService, query)
+	values, err := queryAnyList(ctx, appService, query)
 	if err != nil {
 		return nil, err
 	}
@@ -405,24 +406,24 @@ func queryEnumCandidates(appService queryService, isVertex bool, label, prop str
 	return values, nil
 }
 
-func queryStringList(appService queryService, query string) ([]string, error) {
-	raw, err := executeGremlin(appService, query)
+func queryStringList(ctx context.Context, appService queryService, query string) ([]string, error) {
+	raw, err := executeGremlin(ctx, appService, query)
 	if err != nil {
 		return nil, err
 	}
 	return asStringSlice(raw)
 }
 
-func queryAnyList(appService queryService, query string) ([]any, error) {
-	raw, err := executeGremlin(appService, query)
+func queryAnyList(ctx context.Context, appService queryService, query string) ([]any, error) {
+	raw, err := executeGremlin(ctx, appService, query)
 	if err != nil {
 		return nil, err
 	}
 	return asAnySlice(raw)
 }
 
-func queryEdgePatterns(appService queryService) ([]map[string]string, error) {
-	raw, err := executeGremlin(appService, "g.E().project('out','label','in').by(outV().label()).by(label()).by(inV().label()).dedup()")
+func queryEdgePatterns(ctx context.Context, appService queryService) ([]map[string]string, error) {
+	raw, err := executeGremlin(ctx, appService, "g.E().project('out','label','in').by(outV().label()).by(label()).by(inV().label()).dedup()")
 	if err != nil {
 		return nil, err
 	}
@@ -450,8 +451,8 @@ func queryEdgePatterns(appService queryService) ([]map[string]string, error) {
 	return patterns, nil
 }
 
-func queryCount(appService queryService, query string) (int64, error) {
-	raw, err := executeGremlin(appService, query)
+func queryCount(ctx context.Context, appService queryService, query string) (int64, error) {
+	raw, err := executeGremlin(ctx, appService, query)
 	if err != nil {
 		return 0, err
 	}
@@ -473,8 +474,8 @@ func queryCount(appService queryService, query string) (int64, error) {
 	return 0, fmt.Errorf("unexpected count type %T", raw)
 }
 
-func executeGremlin(appService queryService, query string) (any, error) {
-	prettyJSON, _, err := appService.ExecuteQuery(query, "gremlin")
+func executeGremlin(ctx context.Context, appService queryService, query string) (any, error) {
+	prettyJSON, _, err := appService.ExecuteQueryCtx(ctx, query, "gremlin")
 	if err != nil {
 		return nil, err
 	}
@@ -519,9 +520,32 @@ func asStringSlice(value any) ([]string, error) {
 	return out, nil
 }
 
+// escapeGremlinString escapes a string for safe inclusion in a single-quoted
+// Gremlin string literal. It handles backslashes, single quotes, and control
+// characters that could break out of the string context.
 func escapeGremlinString(value string) string {
 	if value == "" {
 		return value
 	}
-	return strings.ReplaceAll(value, "'", "\\'")
+	var b strings.Builder
+	b.Grow(len(value))
+	for _, r := range value {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '\'':
+			b.WriteString(`\'`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,10 +15,12 @@ type spyExecutor struct {
 	called    bool
 	lastQuery string
 	lastType  string
+	lastCtx   context.Context
 }
 
-func (s *spyExecutor) ExecuteQuery(query, queryType string) (string, string, error) {
+func (s *spyExecutor) ExecuteQueryCtx(ctx context.Context, query, queryType string) (string, string, error) {
 	s.called = true
+	s.lastCtx = ctx
 	s.lastQuery = query
 	s.lastType = queryType
 	return "processed", "raw", nil
@@ -26,11 +29,14 @@ func (s *spyExecutor) ExecuteQuery(query, queryType string) (string, string, err
 func TestQueriesEndpointInvokesExecutor(t *testing.T) {
 	t.Parallel()
 
+	type ctxKey struct{}
+
 	executor := &spyExecutor{}
 	logger := log.NewWithOptions(io.Discard, log.Options{})
 	srv := New(executor, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/queries", strings.NewReader(`{"type":"gremlin","query":"g.V()"}`))
+	req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "http-request"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -47,5 +53,8 @@ func TestQueriesEndpointInvokesExecutor(t *testing.T) {
 	}
 	if executor.lastType != "gremlin" {
 		t.Fatalf("expected type 'gremlin', got %q", executor.lastType)
+	}
+	if got := executor.lastCtx.Value(ctxKey{}); got != "http-request" {
+		t.Fatalf("expected request context to propagate, got %v", got)
 	}
 }

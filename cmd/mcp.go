@@ -46,7 +46,7 @@ func newMcpCommand() *cobra.Command {
 						return nil, nil, fmt.Errorf("query cannot be empty")
 					}
 
-					prettyJSON, _, execErr := appService.ExecuteQuery(query, "gremlin")
+					prettyJSON, _, execErr := appService.ExecuteQueryCtx(ctx, query, "gremlin")
 					if execErr != nil {
 						return nil, nil, execErr
 					}

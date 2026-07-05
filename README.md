@@ -148,9 +148,14 @@ To use `--aws-profile` (or `AWS_PROFILE`) you first need to configure an AWS SSO
 
 ### 1. Find your SSO start URL and region
 
-1. Go to [https://lilly-aws-login.awsapps.com/start](https://lilly-aws-login.awsapps.com/start) and sign in with your **CA account**.
-2. You'll see a list of AWS accounts you have access to. Expand the account you want to use and click **Access keys** next to the role.
-3. In the dialog that opens, note the **SSO start URL** and **SSO region** shown under "AWS IAM Identity Center credentials (Recommended)" — you'll need these in the next step.
+1.  Go to [https://lilly-aws-login.awsapps.com/start](https://lilly-aws-login.awsapps.com/start) and
+sign in with your **CA account**.
+
+2.  You'll see a list of AWS accounts you have access to.  Expand the account you want to use and
+click **Access keys** next to the role.
+
+3.  In the dialog that opens, note the **SSO start URL** and **SSO region** shown under "AWS IAM
+Identity Center credentials (Recommended)" — you'll need these in the next step.
 
 ### 2. Configure the profile
 

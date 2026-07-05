@@ -34,15 +34,17 @@ var (
 )
 
 type queryExecutor interface {
-	ExecuteQuery(string, string) (string, string, error)
+	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
 }
 
+// Server is the HTTP server providing a web UI for executing Neptune queries.
 type Server struct {
 	app    queryExecutor
 	logger *log.Logger
 	mux    *http.ServeMux
 }
 
+// New creates a Server wired to the given query executor and logger.
 func New(appService queryExecutor, logger *log.Logger) *Server {
 	s := &Server{
 		app:    appService,
@@ -62,10 +64,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/queries", s.handleExecuteQuery())
 }
 
+// ServeHTTP implements [http.Handler].
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+// Start begins listening on addr and blocks until ctx is cancelled, at which
+// point the server gracefully shuts down.
 func (s *Server) Start(ctx context.Context, addr string) error {
 	if addr == "" {
 		addr = defaultAddr
@@ -138,7 +143,7 @@ func (s *Server) handleExecuteQuery() http.HandlerFunc {
 			queryType = defaultQueryType
 		}
 
-		processed, raw, err := s.app.ExecuteQuery(req.Query, queryType)
+		processed, raw, err := s.app.ExecuteQueryCtx(r.Context(), req.Query, queryType)
 		resp := queryResponse{
 			Type:        queryType,
 			Processed:   processed,

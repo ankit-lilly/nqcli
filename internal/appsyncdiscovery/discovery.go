@@ -12,8 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/appsync"
 	"github.com/aws/aws-sdk-go-v2/service/appsync/types"
+	"github.com/charmbracelet/log"
 )
 
+// ResolveOptions configures how the AppSync API is discovered.
 type ResolveOptions struct {
 	Profile string
 	APIName string
@@ -36,6 +38,9 @@ type cacheEntry struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
+// ResolveAppSyncURL discovers the GraphQL endpoint URL for a Neptune-backed
+// AppSync API. It checks a local cache first, then queries the AWS AppSync API.
+// The result is cached for subsequent calls.
 func ResolveAppSyncURL(ctx context.Context, awsCfg aws.Config, opts ResolveOptions) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -226,7 +231,9 @@ func writeCacheEntry(key, region, profile string, api *types.GraphqlApi, url str
 	}
 
 	cache.Entries[key] = entry
-	_ = writeCache(cache)
+	if err := writeCache(cache); err != nil {
+		log.Warn("failed to write AppSync discovery cache", "error", err)
+	}
 }
 
 func readCache() (*cacheFile, error) {
@@ -234,7 +241,10 @@ func readCache() (*cacheFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readCacheFromPath(path)
+}
 
+func readCacheFromPath(path string) (*cacheFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -258,6 +268,10 @@ func writeCache(cache *cacheFile) error {
 	if err != nil {
 		return err
 	}
+	return writeCacheToPath(path, cache)
+}
+
+func writeCacheToPath(path string, cache *cacheFile) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

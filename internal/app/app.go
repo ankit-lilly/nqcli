@@ -1,40 +1,71 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-
-	neptune "github.com/ankit-lilly/nqcli/internal/gq"
 )
 
-type AppService struct {
-	neptuneClient *neptune.Client
+// neptuneExecutor defines the capability needed from the Neptune client.
+type neptuneExecutor interface {
+	ExecuteQueryCtx(ctx context.Context, query string, queryType string) (string, error)
 }
 
-func NewAppService(nc *neptune.Client) *AppService {
+// AppService provides query execution against a Neptune database via an
+// AppSync GraphQL endpoint.
+type AppService struct {
+	neptuneClient neptuneExecutor
+}
+
+// NewAppService creates an AppService backed by the given Neptune client.
+func NewAppService(nc neptuneExecutor) *AppService {
 	return &AppService{
 		neptuneClient: nc,
 	}
 }
 
+// Execute reads a query from the given file path (or stdin if empty) and
+// executes it against Neptune using a background context. It returns a
+// pretty-printed result and the raw JSON response.
 func (s *AppService) Execute(queryFilePath string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
+	return s.ExecuteCtx(context.Background(), queryFilePath, queryType)
+}
+
+// ExecuteCtx reads a query from the given file path (or stdin if empty) and
+// executes it against Neptune using the provided context. It returns a
+// pretty-printed result and the raw JSON response.
+func (s *AppService) ExecuteCtx(ctx context.Context, queryFilePath string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
 	query, err := s.readQueryContent(queryFilePath)
 	if err != nil {
 		return "", "", err
 	}
 
-	return s.ExecuteQuery(query, queryType)
+	return s.ExecuteQueryCtx(ctx, query, queryType)
 }
 
+// ExecuteQuery runs a raw query string against Neptune and returns the
+// pretty-printed result extracted from the GraphQL envelope, along with the
+// raw JSON response, using a background context.
 func (s *AppService) ExecuteQuery(query string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
+	return s.ExecuteQueryCtx(context.Background(), query, queryType)
+}
+
+// ExecuteQueryCtx runs a raw query string against Neptune and returns the
+// pretty-printed result extracted from the GraphQL envelope, along with the
+// raw JSON response.
+func (s *AppService) ExecuteQueryCtx(ctx context.Context, query string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	if strings.TrimSpace(query) == "" {
 		return "", "", fmt.Errorf("query content is empty")
 	}
 
-	rawJSONResponse, err = s.neptuneClient.ExecuteQuery(query, queryType)
+	rawJSONResponse, err = s.neptuneClient.ExecuteQueryCtx(ctx, query, queryType)
 	if err != nil {
 		return "", rawJSONResponse, fmt.Errorf("neptune query failed: %w", err)
 	}

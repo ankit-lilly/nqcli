@@ -17,6 +17,14 @@ func (s *stubQueryService) Execute(_ string, _ string) (string, string, error) {
 }
 
 func (s *stubQueryService) ExecuteQuery(_ string, _ string) (string, string, error) {
+	return s.ExecuteQueryCtx(context.Background(), "", "")
+}
+
+func (s *stubQueryService) ExecuteCtx(_ context.Context, _ string, _ string) (string, string, error) {
+	return "", "", errors.New("not implemented")
+}
+
+func (s *stubQueryService) ExecuteQueryCtx(_ context.Context, _ string, _ string) (string, string, error) {
 	s.execCalls++
 	if s.execErr != nil {
 		return "", "", s.execErr
