@@ -7,27 +7,11 @@ import (
 )
 
 type spyQueryService struct {
-	executeCalls         int
-	executeQueryCalls    int
 	executeCtxCalls      int
 	executeQueryCtxCalls int
 	lastQuery            string
 	lastQueryType        string
 	lastCtx              context.Context
-}
-
-func (s *spyQueryService) Execute(path, queryType string) (string, string, error) {
-	s.executeCalls++
-	s.lastQuery = path
-	s.lastQueryType = queryType
-	return "{}", "", nil
-}
-
-func (s *spyQueryService) ExecuteQuery(query, queryType string) (string, string, error) {
-	s.executeQueryCalls++
-	s.lastQuery = query
-	s.lastQueryType = queryType
-	return "{}", "", nil
 }
 
 func (s *spyQueryService) ExecuteCtx(ctx context.Context, path, queryType string) (string, string, error) {
@@ -46,7 +30,7 @@ func (s *spyQueryService) ExecuteQueryCtx(ctx context.Context, query, queryType 
 	return "{}", "", nil
 }
 
-func TestRootCommandInlineQueryCallsExecuteQuery(t *testing.T) {
+func TestRootCommandInlineQueryCallsExecuteQueryCtx(t *testing.T) {
 	type ctxKey struct{}
 
 	spy := &spyQueryService{}
@@ -68,12 +52,6 @@ func TestRootCommandInlineQueryCallsExecuteQuery(t *testing.T) {
 	if spy.executeQueryCtxCalls != 1 {
 		t.Fatalf("expected ExecuteQueryCtx to be called once, got %d", spy.executeQueryCtxCalls)
 	}
-	if spy.executeQueryCalls != 0 {
-		t.Fatalf("expected ExecuteQuery not to be called, got %d", spy.executeQueryCalls)
-	}
-	if spy.executeCalls != 0 {
-		t.Fatalf("expected Execute not to be called, got %d", spy.executeCalls)
-	}
 	if spy.executeCtxCalls != 0 {
 		t.Fatalf("expected ExecuteCtx not to be called, got %d", spy.executeCtxCalls)
 	}
@@ -88,7 +66,7 @@ func TestRootCommandInlineQueryCallsExecuteQuery(t *testing.T) {
 	}
 }
 
-func TestRootCommandFileArgumentCallsExecute(t *testing.T) {
+func TestRootCommandFileArgumentCallsExecuteCtx(t *testing.T) {
 	type ctxKey struct{}
 
 	spy := &spyQueryService{}
@@ -115,12 +93,6 @@ func TestRootCommandFileArgumentCallsExecute(t *testing.T) {
 
 	if spy.executeCtxCalls != 1 {
 		t.Fatalf("expected ExecuteCtx to be called once, got %d", spy.executeCtxCalls)
-	}
-	if spy.executeCalls != 0 {
-		t.Fatalf("expected Execute not to be called, got %d", spy.executeCalls)
-	}
-	if spy.executeQueryCalls != 0 {
-		t.Fatalf("expected ExecuteQuery not to be called, got %d", spy.executeQueryCalls)
 	}
 	if spy.executeQueryCtxCalls != 0 {
 		t.Fatalf("expected ExecuteQueryCtx not to be called, got %d", spy.executeQueryCtxCalls)

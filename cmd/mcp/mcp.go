@@ -1,4 +1,4 @@
-package cmd
+package mcp
 
 import (
 	"context"
@@ -9,22 +9,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type QueryService interface {
+	ExecuteQueryCtx(ctx context.Context, query, queryType string) (string, string, error)
+}
+
 type runGremlinArgs struct {
 	Query string `json:"query" jsonschema:"The Gremlin traversal string to execute"`
 }
 
-func init() {
-	rootCmd.AddCommand(newMcpCommand())
-}
-
-func newMcpCommand() *cobra.Command {
-	cmd := &cobra.Command{
+func NewCommand(factory func(context.Context) (QueryService, error), version string) *cobra.Command {
+	return &cobra.Command{
 		Use:           "mcp",
 		Short:         "Start an MCP server over stdio for running Neptune queries.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appService, err := newQueryService(cmd.Context())
+			appService, err := factory(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -40,8 +40,8 @@ func newMcpCommand() *cobra.Command {
 					Name:        "run_gremlin_query",
 					Description: "Run a Gremlin query against Neptune. Returns the JSON result from the database.",
 				},
-				func(ctx context.Context, req *mcp.CallToolRequest, args runGremlinArgs) (*mcp.CallToolResult, any, error) {
-					query := strings.TrimSpace(args.Query)
+				func(ctx context.Context, req *mcp.CallToolRequest, a runGremlinArgs) (*mcp.CallToolResult, any, error) {
+					query := strings.TrimSpace(a.Query)
 					if query == "" {
 						return nil, nil, fmt.Errorf("query cannot be empty")
 					}
@@ -65,7 +65,7 @@ func newMcpCommand() *cobra.Command {
 					Name:        "get_graph_schema",
 					Description: "Returns the embedded graph schema (default). Set NQ_MCP_SCHEMA_SOURCE=dynamic to run live discovery (labels, properties, edge patterns, counts, enums).",
 				},
-				func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
+				func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 					prettyJSON, execErr := buildGraphSchema(ctx, appService)
 					if execErr != nil {
 						return nil, nil, execErr
@@ -82,6 +82,4 @@ func newMcpCommand() *cobra.Command {
 			return server.Run(cmd.Context(), &mcp.StdioTransport{})
 		},
 	}
-
-	return cmd
 }

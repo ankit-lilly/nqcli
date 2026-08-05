@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	mcpcmd "github.com/ankit-lilly/nqcli/cmd/mcp"
+	servercmd "github.com/ankit-lilly/nqcli/cmd/server"
 	"github.com/ankit-lilly/nqcli/internal/app"
 	"github.com/ankit-lilly/nqcli/internal/appsyncdiscovery"
 	"github.com/ankit-lilly/nqcli/internal/config"
@@ -17,9 +19,7 @@ import (
 )
 
 type queryService interface {
-	Execute(string, string) (string, string, error)
 	ExecuteCtx(context.Context, string, string) (string, string, error)
-	ExecuteQuery(string, string) (string, string, error)
 	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
 }
 
@@ -67,8 +67,6 @@ var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 			APIID:   cfg.AppSyncAPIID,
 		})
 		if err != nil {
-			// Discovery failed (e.g., dev environment where AppSync is gone).
-			// Fall back to hardcoded dev REST endpoint.
 			cfg.URL = devRESTEndpoint
 		} else {
 			cfg.URL = url
@@ -88,6 +86,14 @@ var newQueryService = func(ctx context.Context) (queryService, error) {
 		return nil, err
 	}
 	return app.NewAppService(neptuneClient), nil
+}
+
+func mcpServiceFactory(ctx context.Context) (mcpcmd.QueryService, error) {
+	return newQueryService(ctx)
+}
+
+func serverServiceFactory(ctx context.Context) (servercmd.QueryService, error) {
+	return newQueryService(ctx)
 }
 
 var rootCmd = &cobra.Command{
@@ -122,19 +128,12 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		queryType, err := cmd.Flags().GetString("type")
-		if err != nil {
-			return err
-		}
+		queryType, _ := cmd.Flags().GetString("type")
 
 		appService, err := newQueryService(cmd.Context())
 		if err != nil {
 			return err
 		}
-
-		l := log.NewWithOptions(os.Stderr, log.Options{
-			ReportTimestamp: false,
-		})
 
 		var (
 			prettyJSON string
@@ -147,6 +146,7 @@ var rootCmd = &cobra.Command{
 			prettyJSON, _, execErr = appService.ExecuteCtx(cmd.Context(), queryFile, queryType)
 		}
 		if execErr != nil {
+			l := log.NewWithOptions(os.Stderr, log.Options{ReportTimestamp: false})
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Bold(true)
 			l.Error(style.Render("Error"), "details", execErr)
 			return execErr
@@ -169,47 +169,28 @@ func init() {
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
-	rootCmd.PersistentFlags().StringVar(
-		&envFilePath,
-		"env-file",
-		"",
-		"Path to a .env file to load before executing (defaults to ./ .env, then ~/.env).",
-	)
-	rootCmd.PersistentFlags().StringVar(
-		&awsProfile,
-		"aws-profile",
-		"",
-		"Optional AWS shared config profile to use for authentication.",
-	)
-	rootCmd.PersistentFlags().StringVar(
-		&awsRegion,
-		"aws-region",
-		"",
-		"Override the AWS region when signing AppSync requests.",
-	)
+	rootCmd.PersistentFlags().StringVar(&envFilePath, "env-file", "",
+		"Path to a .env file to load before executing (defaults to ./ .env, then ~/.env).")
+	rootCmd.PersistentFlags().StringVar(&awsProfile, "aws-profile", "",
+		"Optional AWS shared config profile to use for authentication.")
+	rootCmd.PersistentFlags().StringVar(&awsRegion, "aws-region", "",
+		"Override the AWS region when signing AppSync requests.")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if err := config.LoadEnvironment(envFilePath); err != nil {
-			return err
-		}
-		return nil
+		return config.LoadEnvironment(envFilePath)
 	}
 
-	rootCmd.Flags().String(
-		"type",
-		"gremlin",
-		"The type of query to execute. Must be 'gremlin' or 'cypher'.",
-	)
+	rootCmd.Flags().String("type", "gremlin",
+		"The type of query to execute. Must be 'gremlin' or 'cypher'.")
 
 	rootCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-		queryType, err := cmd.Flags().GetString("type")
-		if err != nil {
-			return err
-		}
-
+		queryType, _ := cmd.Flags().GetString("type")
 		if queryType != "gremlin" && queryType != "cypher" {
 			return fmt.Errorf("invalid value for --type: %s. Must be 'gremlin' or 'cypher'", queryType)
 		}
 		return nil
 	}
+
+	rootCmd.AddCommand(mcpcmd.NewCommand(mcpServiceFactory, version))
+	rootCmd.AddCommand(servercmd.NewCommand(serverServiceFactory))
 }

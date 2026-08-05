@@ -1,4 +1,4 @@
-package cmd
+package mcp
 
 import (
 	"context"
@@ -224,7 +224,6 @@ const staticSchemaJSON = `{
 const (
 	schemaSourceEnvVar   = "NQ_MCP_SCHEMA_SOURCE"
 	schemaSourceDynamic  = "dynamic"
-	schemaSourceStatic   = "static"
 	enumSampleLimit      = 10
 	enumReturnLimit      = 10
 	enumSampleValueLimit = 5
@@ -251,43 +250,34 @@ type propertyInfo struct {
 	SampleValues []any  `json:"sample_values,omitempty"`
 }
 
-func buildGraphSchema(ctx context.Context, appService queryService) (string, error) {
-	staticSchema := strings.TrimSpace(staticSchemaJSON)
+func buildGraphSchema(ctx context.Context, svc QueryService) (string, error) {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv(schemaSourceEnvVar)))
-	if mode == "" {
-		mode = schemaSourceStatic
+	if mode != schemaSourceDynamic {
+		return staticSchemaJSON, nil
 	}
 
-	if mode != schemaSourceDynamic && staticSchema != "" {
-		return staticSchema, nil
+	dynamicSchema, err := discoverGraphSchema(ctx, svc)
+	if err != nil {
+		return staticSchemaJSON, nil
 	}
 
-	dynamicSchema, err := discoverGraphSchema(ctx, appService)
-	if err == nil {
-		payload, marshalErr := json.MarshalIndent(dynamicSchema, "", "  ")
-		if marshalErr != nil {
-			return "", marshalErr
-		}
-		return string(payload), nil
+	payload, err := json.MarshalIndent(dynamicSchema, "", "  ")
+	if err != nil {
+		return "", err
 	}
-
-	if staticSchema != "" {
-		return staticSchema, nil
-	}
-
-	return "", err
+	return string(payload), nil
 }
 
-func discoverGraphSchema(ctx context.Context, appService queryService) (*graphSchema, error) {
-	vertexLabels, err := queryStringList(ctx, appService, "g.V().label().dedup()")
+func discoverGraphSchema(ctx context.Context, svc QueryService) (*graphSchema, error) {
+	vertexLabels, err := queryStringList(ctx, svc, "g.V().label().dedup()")
 	if err != nil {
 		return nil, fmt.Errorf("discover vertex labels: %w", err)
 	}
-	edgeLabels, err := queryStringList(ctx, appService, "g.E().label().dedup()")
+	edgeLabels, err := queryStringList(ctx, svc, "g.E().label().dedup()")
 	if err != nil {
 		return nil, fmt.Errorf("discover edge labels: %w", err)
 	}
-	edgePatterns, err := queryEdgePatterns(ctx, appService)
+	edgePatterns, err := queryEdgePatterns(ctx, svc)
 	if err != nil {
 		return nil, fmt.Errorf("discover edge patterns: %w", err)
 	}
@@ -297,58 +287,20 @@ func discoverGraphSchema(ctx context.Context, appService queryService) (*graphSc
 
 	vertices := make(map[string]labelSchema, len(vertexLabels))
 	for _, label := range vertexLabels {
-		props, propErr := queryStringList(
-			ctx,
-			appService,
-			fmt.Sprintf("g.V().hasLabel('%s').properties().key().dedup()", escapeGremlinString(label)),
-		)
-		if propErr != nil {
-			return nil, fmt.Errorf("discover vertex properties for %s: %w", label, propErr)
+		ls, err := discoverLabelSchema(ctx, svc, true, label)
+		if err != nil {
+			return nil, err
 		}
-		propInfos, enumErr := buildPropertyInfos(ctx, appService, true, label, props)
-		if enumErr != nil {
-			return nil, fmt.Errorf("analyze vertex properties for %s: %w", label, enumErr)
-		}
-		count, countErr := queryCount(
-			ctx,
-			appService,
-			fmt.Sprintf("g.V().hasLabel('%s').count()", escapeGremlinString(label)),
-		)
-		if countErr != nil {
-			return nil, fmt.Errorf("count vertices for %s: %w", label, countErr)
-		}
-		vertices[label] = labelSchema{
-			Count:      count,
-			Properties: propInfos,
-		}
+		vertices[label] = ls
 	}
 
 	edges := make(map[string]labelSchema, len(edgeLabels))
 	for _, label := range edgeLabels {
-		props, propErr := queryStringList(
-			ctx,
-			appService,
-			fmt.Sprintf("g.E().hasLabel('%s').properties().key().dedup()", escapeGremlinString(label)),
-		)
-		if propErr != nil {
-			return nil, fmt.Errorf("discover edge properties for %s: %w", label, propErr)
+		ls, err := discoverLabelSchema(ctx, svc, false, label)
+		if err != nil {
+			return nil, err
 		}
-		propInfos, enumErr := buildPropertyInfos(ctx, appService, false, label, props)
-		if enumErr != nil {
-			return nil, fmt.Errorf("analyze edge properties for %s: %w", label, enumErr)
-		}
-		count, countErr := queryCount(
-			ctx,
-			appService,
-			fmt.Sprintf("g.E().hasLabel('%s').count()", escapeGremlinString(label)),
-		)
-		if countErr != nil {
-			return nil, fmt.Errorf("count edges for %s: %w", label, countErr)
-		}
-		edges[label] = labelSchema{
-			Count:      count,
-			Properties: propInfos,
-		}
+		edges[label] = ls
 	}
 
 	return &graphSchema{
@@ -362,41 +314,52 @@ func discoverGraphSchema(ctx context.Context, appService queryService) (*graphSc
 	}, nil
 }
 
-func buildPropertyInfos(ctx context.Context, appService queryService, isVertex bool, label string, props []string) ([]propertyInfo, error) {
+func discoverLabelSchema(ctx context.Context, svc QueryService, isVertex bool, label string) (labelSchema, error) {
+	prefix := "g.E()"
+	if isVertex {
+		prefix = "g.V()"
+	}
+	escaped := escapeGremlinString(label)
+
+	props, err := queryStringList(ctx, svc,
+		fmt.Sprintf("%s.hasLabel('%s').properties().key().dedup()", prefix, escaped))
+	if err != nil {
+		return labelSchema{}, fmt.Errorf("discover properties for %s: %w", label, err)
+	}
+
 	slices.Sort(props)
 	infos := make([]propertyInfo, 0, len(props))
 	for _, prop := range props {
-		values, err := queryEnumCandidates(ctx, appService, isVertex, label, prop)
+		values, err := queryEnumCandidates(ctx, svc, prefix, escaped, prop)
 		if err != nil {
-			return nil, err
+			return labelSchema{}, fmt.Errorf("analyze properties for %s: %w", label, err)
 		}
-
 		info := propertyInfo{Name: prop}
 		if len(values) > 0 {
 			sampleLimit := min(enumSampleValueLimit, len(values))
 			info.SampleValues = values[:sampleLimit]
-		}
-		if len(values) > 0 && len(values) <= enumReturnLimit {
-			info.Enum = values
+			if len(values) <= enumReturnLimit {
+				info.Enum = values
+			}
 		}
 		infos = append(infos, info)
 	}
-	return infos, nil
+
+	count, err := queryCount(ctx, svc,
+		fmt.Sprintf("%s.hasLabel('%s').count()", prefix, escaped))
+	if err != nil {
+		return labelSchema{}, fmt.Errorf("count for %s: %w", label, err)
+	}
+
+	return labelSchema{Count: count, Properties: infos}, nil
 }
 
-func queryEnumCandidates(ctx context.Context, appService queryService, isVertex bool, label, prop string) ([]any, error) {
-	prefix := "g.V()"
-	if !isVertex {
-		prefix = "g.E()"
-	}
+func queryEnumCandidates(ctx context.Context, svc QueryService, prefix, escapedLabel, prop string) ([]any, error) {
 	query := fmt.Sprintf(
 		"%s.hasLabel('%s').values('%s').dedup().limit(%d)",
-		prefix,
-		escapeGremlinString(label),
-		escapeGremlinString(prop),
-		enumSampleLimit+1,
+		prefix, escapedLabel, escapeGremlinString(prop), enumSampleLimit+1,
 	)
-	values, err := queryAnyList(ctx, appService, query)
+	values, err := queryAnyList(ctx, svc, query)
 	if err != nil {
 		return nil, err
 	}
@@ -406,30 +369,62 @@ func queryEnumCandidates(ctx context.Context, appService queryService, isVertex 
 	return values, nil
 }
 
-func queryStringList(ctx context.Context, appService queryService, query string) ([]string, error) {
-	raw, err := executeGremlin(ctx, appService, query)
+func queryStringList(ctx context.Context, svc QueryService, query string) ([]string, error) {
+	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return nil, err
 	}
-	return asStringSlice(raw)
+	if raw == nil {
+		return nil, nil
+	}
+	switch v := raw.(type) {
+	case []string:
+		return v, nil
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("expected string item, got %T", item)
+			}
+			out = append(out, s)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("expected list, got %T", raw)
+	}
 }
 
-func queryAnyList(ctx context.Context, appService queryService, query string) ([]any, error) {
-	raw, err := executeGremlin(ctx, appService, query)
+func queryAnyList(ctx context.Context, svc QueryService, query string) ([]any, error) {
+	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return nil, err
 	}
-	return asAnySlice(raw)
+	if raw == nil {
+		return nil, nil
+	}
+	switch v := raw.(type) {
+	case []any:
+		return v, nil
+	case []string:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = item
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("expected list, got %T", raw)
+	}
 }
 
-func queryEdgePatterns(ctx context.Context, appService queryService) ([]map[string]string, error) {
-	raw, err := executeGremlin(ctx, appService, "g.E().project('out','label','in').by(outV().label()).by(label()).by(inV().label()).dedup()")
+func queryEdgePatterns(ctx context.Context, svc QueryService) ([]map[string]string, error) {
+	raw, err := executeGremlin(ctx, svc, "g.E().project('out','label','in').by(outV().label()).by(label()).by(inV().label()).dedup()")
 	if err != nil {
 		return nil, err
 	}
-	anyList, err := asAnySlice(raw)
-	if err != nil {
-		return nil, err
+	anyList, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("expected list, got %T", raw)
 	}
 	patterns := make([]map[string]string, 0, len(anyList))
 	for _, item := range anyList {
@@ -437,10 +432,10 @@ func queryEdgePatterns(ctx context.Context, appService queryService) ([]map[stri
 		if !ok {
 			continue
 		}
-		outVal, outOk := m["out"].(string)
-		labelVal, labelOk := m["label"].(string)
-		inVal, inOk := m["in"].(string)
-		if outOk && labelOk && inOk {
+		outVal, _ := m["out"].(string)
+		labelVal, _ := m["label"].(string)
+		inVal, _ := m["in"].(string)
+		if outVal != "" && labelVal != "" && inVal != "" {
 			patterns = append(patterns, map[string]string{
 				"out":   outVal,
 				"label": labelVal,
@@ -451,8 +446,8 @@ func queryEdgePatterns(ctx context.Context, appService queryService) ([]map[stri
 	return patterns, nil
 }
 
-func queryCount(ctx context.Context, appService queryService, query string) (int64, error) {
-	raw, err := executeGremlin(ctx, appService, query)
+func queryCount(ctx context.Context, svc QueryService, query string) (int64, error) {
+	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return 0, err
 	}
@@ -474,8 +469,8 @@ func queryCount(ctx context.Context, appService queryService, query string) (int
 	return 0, fmt.Errorf("unexpected count type %T", raw)
 }
 
-func executeGremlin(ctx context.Context, appService queryService, query string) (any, error) {
-	prettyJSON, _, err := appService.ExecuteQueryCtx(ctx, query, "gremlin")
+func executeGremlin(ctx context.Context, svc QueryService, query string) (any, error) {
+	prettyJSON, _, err := svc.ExecuteQueryCtx(ctx, query, "gremlin")
 	if err != nil {
 		return nil, err
 	}
@@ -486,43 +481,7 @@ func executeGremlin(ctx context.Context, appService queryService, query string) 
 	return payload, nil
 }
 
-func asAnySlice(value any) ([]any, error) {
-	if value == nil {
-		return nil, nil
-	}
-	switch v := value.(type) {
-	case []any:
-		return v, nil
-	case []string:
-		out := make([]any, len(v))
-		for i, item := range v {
-			out[i] = item
-		}
-		return out, nil
-	default:
-		return nil, fmt.Errorf("expected list, got %T", value)
-	}
-}
-
-func asStringSlice(value any) ([]string, error) {
-	list, err := asAnySlice(value)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(list))
-	for _, item := range list {
-		str, ok := item.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string item, got %T", item)
-		}
-		out = append(out, str)
-	}
-	return out, nil
-}
-
-// escapeGremlinString escapes a string for safe inclusion in a single-quoted
-// Gremlin string literal. It handles backslashes, single quotes, and control
-// characters that could break out of the string context.
+// escapeGremlinString prevents injection in single-quoted Gremlin string literals.
 func escapeGremlinString(value string) string {
 	if value == "" {
 		return value
