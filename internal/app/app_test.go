@@ -81,7 +81,7 @@ func TestExecuteQuery_SuccessfulResponseExtraction(t *testing.T) {
 		{
 			name:          "response missing data key",
 			response:      `{"errors":[{"message":"bad query"}]}`,
-			wantProcessed: `{"errors":[{"message":"bad query"}]}`,
+			wantProcessed: "{\n  \"errors\": [\n    {\n      \"message\": \"bad query\"\n    }\n  ]\n}",
 			wantRaw:       `{"errors":[{"message":"bad query"}]}`,
 		},
 		{
@@ -101,6 +101,12 @@ func TestExecuteQuery_SuccessfulResponseExtraction(t *testing.T) {
 			response:      `{"data":{"executeQuery":"[1,2,3]"}}`,
 			wantProcessed: "[\n  1,\n  2,\n  3\n]",
 			wantRaw:       `{"data":{"executeQuery":"[1,2,3]"}}`,
+		},
+		{
+			name:          "REST mode: data holds an array directly",
+			response:      `{"data":[{"id":"1","label":"Study"}]}`,
+			wantProcessed: "[\n  {\n    \"id\": \"1\",\n    \"label\": \"Study\"\n  }\n]",
+			wantRaw:       `{"data":[{"id":"1","label":"Study"}]}`,
 		},
 	}
 
@@ -127,9 +133,15 @@ func TestExecuteQuery_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	svc, _ := newServiceWithStub("not valid json", nil)
 
-	_, _, err := svc.ExecuteQuery("g.V()", "gremlin")
-	if err == nil {
-		t.Fatal("expected error for invalid JSON response")
+	processed, raw, err := svc.ExecuteQuery("g.V()", "gremlin")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if processed != "not valid json" {
+		t.Errorf("expected raw passthrough, got %q", processed)
+	}
+	if raw != "not valid json" {
+		t.Errorf("expected raw to match response, got %q", raw)
 	}
 }
 

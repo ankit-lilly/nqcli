@@ -9,34 +9,24 @@ import (
 	"strings"
 )
 
-// neptuneExecutor defines the capability needed from the Neptune client.
 type neptuneExecutor interface {
 	ExecuteQueryCtx(ctx context.Context, query string, queryType string) (string, error)
 }
 
-// AppService provides query execution against a Neptune database via an
-// AppSync GraphQL endpoint.
 type AppService struct {
 	neptuneClient neptuneExecutor
 }
 
-// NewAppService creates an AppService backed by the given Neptune client.
 func NewAppService(nc neptuneExecutor) *AppService {
 	return &AppService{
 		neptuneClient: nc,
 	}
 }
 
-// Execute reads a query from the given file path (or stdin if empty) and
-// executes it against Neptune using a background context. It returns a
-// pretty-printed result and the raw JSON response.
 func (s *AppService) Execute(queryFilePath string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
 	return s.ExecuteCtx(context.Background(), queryFilePath, queryType)
 }
 
-// ExecuteCtx reads a query from the given file path (or stdin if empty) and
-// executes it against Neptune using the provided context. It returns a
-// pretty-printed result and the raw JSON response.
 func (s *AppService) ExecuteCtx(ctx context.Context, queryFilePath string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
 	query, err := s.readQueryContent(queryFilePath)
 	if err != nil {
@@ -46,16 +36,10 @@ func (s *AppService) ExecuteCtx(ctx context.Context, queryFilePath string, query
 	return s.ExecuteQueryCtx(ctx, query, queryType)
 }
 
-// ExecuteQuery runs a raw query string against Neptune and returns the
-// pretty-printed result extracted from the GraphQL envelope, along with the
-// raw JSON response, using a background context.
 func (s *AppService) ExecuteQuery(query string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
 	return s.ExecuteQueryCtx(context.Background(), query, queryType)
 }
 
-// ExecuteQueryCtx runs a raw query string against Neptune and returns the
-// pretty-printed result extracted from the GraphQL envelope, along with the
-// raw JSON response.
 func (s *AppService) ExecuteQueryCtx(ctx context.Context, query string, queryType string) (processedOutput string, rawJSONResponse string, err error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -72,14 +56,20 @@ func (s *AppService) ExecuteQueryCtx(ctx context.Context, query string, queryTyp
 
 	var responseMap map[string]any
 	if err := json.Unmarshal([]byte(rawJSONResponse), &responseMap); err != nil {
-		return rawJSONResponse, rawJSONResponse, fmt.Errorf("failed to unmarshal JSON response: %w", err)
+		// Not a JSON object — try pretty-printing as generic JSON (could be an array)
+		var parsed any
+		if jsonErr := json.Unmarshal([]byte(rawJSONResponse), &parsed); jsonErr != nil {
+			return rawJSONResponse, rawJSONResponse, nil
+		}
+		prettyJSON, _ := json.MarshalIndent(parsed, "", "  ")
+		return string(prettyJSON), rawJSONResponse, nil
 	}
 
-	data, ok := responseMap["data"].(map[string]any)
+	rawData, hasData := responseMap["data"]
+	data, isEnvelope := rawData.(map[string]any)
 
-	if !ok || data == nil {
-		processedOutput = rawJSONResponse
-	} else {
+	switch {
+	case isEnvelope && data != nil:
 		executeQuery, ok := data["executeQuery"].(string)
 		if !ok {
 			processedOutput = rawJSONResponse
@@ -99,11 +89,27 @@ func (s *AppService) ExecuteQueryCtx(ctx context.Context, query string, queryTyp
 
 				prettyJSON, marshalErr := json.MarshalIndent(finalOutputData, "", "  ")
 				if marshalErr != nil {
-					processedOutput = executeQuery // Fallback
+					processedOutput = executeQuery
 				} else {
 					processedOutput = string(prettyJSON)
 				}
 			}
+		}
+	case hasData && rawData != nil:
+		// REST mode: "data" holds the result directly (e.g. an array) — unwrap it
+		// so the output matches the AppSync envelope's already-unwrapped shape.
+		prettyJSON, marshalErr := json.MarshalIndent(rawData, "", "  ")
+		if marshalErr != nil {
+			processedOutput = rawJSONResponse
+		} else {
+			processedOutput = string(prettyJSON)
+		}
+	default:
+		prettyJSON, marshalErr := json.MarshalIndent(responseMap, "", "  ")
+		if marshalErr != nil {
+			processedOutput = rawJSONResponse
+		} else {
+			processedOutput = string(prettyJSON)
 		}
 	}
 

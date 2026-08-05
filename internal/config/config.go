@@ -11,7 +11,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config holds the application configuration loaded from environment variables.
 type Config struct {
 	URL            string
 	AppSyncAPIName string

@@ -37,14 +37,12 @@ type queryExecutor interface {
 	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
 }
 
-// Server is the HTTP server providing a web UI for executing Neptune queries.
 type Server struct {
 	app    queryExecutor
 	logger *log.Logger
 	mux    *http.ServeMux
 }
 
-// New creates a Server wired to the given query executor and logger.
 func New(appService queryExecutor, logger *log.Logger) *Server {
 	s := &Server{
 		app:    appService,

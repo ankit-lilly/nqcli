@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// ResolveOptions configures how the AppSync API is discovered.
 type ResolveOptions struct {
 	Profile string
 	APIName string
@@ -23,6 +22,7 @@ type ResolveOptions struct {
 }
 
 const cacheVersion = 1
+const cacheTTL = 7 * 24 * time.Hour
 
 type cacheFile struct {
 	Version int                    `json:"version"`
@@ -197,6 +197,11 @@ func readCacheEntry(key string) string {
 	}
 	entry, ok := cache.Entries[key]
 	if !ok || entry == nil {
+		return ""
+	}
+	if time.Since(entry.FetchedAt) > cacheTTL {
+		delete(cache.Entries, key)
+		_ = writeCache(cache)
 		return ""
 	}
 	return entry.URL

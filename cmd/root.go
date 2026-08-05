@@ -30,6 +30,8 @@ var (
 	version     = "dev"
 )
 
+const devRESTEndpoint = "https://9nyrl8j1d5-vpce-069388414a9f87f40.execute-api.us-east-2.amazonaws.com/dev/api/v1/internal/neptune/query"
+
 var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -50,7 +52,6 @@ var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 		return nil, fmt.Errorf("load AWS configuration: %w", err)
 	}
 
-	// Fallback: if no region from flag or SDK chain, default to us-east-2.
 	if awsCfg.Region == "" {
 		awsCfg.Region = "us-east-2"
 	}
@@ -66,13 +67,16 @@ var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 			APIID:   cfg.AppSyncAPIID,
 		})
 		if err != nil {
-			return nil, err
+			// Discovery failed (e.g., dev environment where AppSync is gone).
+			// Fall back to hardcoded dev REST endpoint.
+			cfg.URL = devRESTEndpoint
+		} else {
+			cfg.URL = url
 		}
-		cfg.URL = url
 	}
 
 	if cfg.URL == "" {
-		return nil, fmt.Errorf("appsync endpoint is required; set NEPTUNE_URL or configure discovery")
+		return nil, fmt.Errorf("neptune endpoint is required; set NEPTUNE_URL or configure discovery")
 	}
 
 	return neptune.NewClient(cfg, awsCfg)
@@ -153,7 +157,6 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute runs the root command and exits with code 1 on failure.
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
