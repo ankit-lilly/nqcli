@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	mcpcmd "github.com/ankit-lilly/nqcli/cmd/mcp"
 	servercmd "github.com/ankit-lilly/nqcli/cmd/server"
@@ -31,6 +32,7 @@ var (
 )
 
 const devRESTEndpoint = "https://9nyrl8j1d5-vpce-069388414a9f87f40.execute-api.us-east-2.amazonaws.com/dev/api/v1/internal/neptune/query"
+const qaRESTEndpoint = "https://xbaoguy6re-vpce-058757a9c034d181c.execute-api.us-east-2.amazonaws.com/qa/api/v1/internal/neptune/query"
 
 var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 	if ctx == nil {
@@ -67,7 +69,11 @@ var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
 			APIID:   cfg.AppSyncAPIID,
 		})
 		if err != nil {
-			cfg.URL = devRESTEndpoint
+			if strings.Contains(strings.ToLower(profileName), "qa") {
+				cfg.URL = qaRESTEndpoint
+			} else {
+				cfg.URL = devRESTEndpoint
+			}
 		} else {
 			cfg.URL = url
 		}
