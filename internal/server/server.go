@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ankit-lilly/nqcli/internal/core"
+	graphschema "github.com/ankit-lilly/nqcli/internal/schema"
 	"github.com/charmbracelet/log"
 )
 
@@ -43,7 +44,7 @@ type Server struct {
 	queryEngine string
 	logger      *log.Logger
 	mux         *http.ServeMux
-	schema      *schemaManager
+	schema      *graphschema.Service
 }
 
 type ServiceFactory func(context.Context, string) (core.QueryService, error)
@@ -71,7 +72,7 @@ func NewWithOptions(service core.QueryService, logger *log.Logger, opts Options)
 		logger:      logger,
 		mux:         http.NewServeMux(),
 	}
-	s.schema = newSchemaManager(logger)
+	s.schema = graphschema.NewService(logger)
 
 	s.routes()
 

@@ -9,7 +9,6 @@
 		"test": "bun test src"
 	},
 	"dependencies": {
-		"@nq/graph-surface": "file:../../ui/graph-surface",
 		"@codemirror/commands": "^6.11.0",
 		"@codemirror/lang-javascript": "^6.2.5",
 		"@codemirror/language": "^6.12.4",
@@ -18,11 +17,13 @@
 		"@codemirror/state": "^6.7.4",
 		"@codemirror/theme-one-dark": "^6.1.3",
 		"@codemirror/view": "^6.43.11",
+		"@nq/graph-surface": "file:../../ui/graph-surface",
 		"codemirror": "^6.0.2",
 		"cytoscape": "^3.30.0",
 		"cytoscape-dagre": "^2.5.0",
 		"daisyui": "^5.7.28",
 		"highlight.js": "^11.11.0",
+		"lucide-solid": "^1.45.0",
 		"solid-js": "^1.9.0"
 	},
 	"devDependencies": {

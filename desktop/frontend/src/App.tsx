@@ -1,16 +1,7 @@
-import { createSignal, createEffect, Show, lazy, Suspense } from "solid-js";
+import { lazy, Show, Suspense, createEffect, createSignal } from "solid-js";
 import { DesktopService } from "../bindings/github.com/ankit-lilly/nqcli/internal/desktop";
-import { detectInitialTheme, applyTheme, type Theme } from "./lib/theme";
-const QueryEditor = lazy(() => import("./components/QueryEditor"));
-import QueryToolbar from "./components/QueryToolbar";
-import SavedQueries from "./components/SavedQueries";
-import ResultPanel from "./components/ResultPanel";
-import NodeDetail from "./components/NodeDetail";
-import StatusBar from "./components/StatusBar";
-import ProfileSwitcher from "./components/ProfileSwitcher";
-import ThemeSwitcher from "./components/ThemeSwitcher";
-import { graphExplorer } from "./bootstrap/graph";
 import type { ExpandVertexCommand } from "./application/graph-explorer";
+import { graphExplorer } from "./bootstrap/graph";
 import {
 	graphLabels,
 	mergeGraphElements,
@@ -19,11 +10,24 @@ import {
 	type GraphElement,
 	type GraphSelection,
 } from "./domain/graph";
-const SoAMatrix = lazy(() => import("./components/SoAMatrix"));
+import NodeDetail from "./components/NodeDetail";
+import ProfileSwitcher from "./components/ProfileSwitcher";
+import QueryToolbar from "./components/QueryToolbar";
+import ResultPanel from "./components/ResultPanel";
+import SavedQueries from "./components/SavedQueries";
+import SplitPane from "./components/SplitPane";
+import StatusBar from "./components/StatusBar";
+import ThemeSwitcher from "./components/ThemeSwitcher";
+import { applyTheme, detectInitialTheme, type Theme } from "./lib/theme";
+
+const QueryEditor = lazy(() => import("./components/QueryEditor"));
+const SchemaView = lazy(() => import("./components/SchemaView"));
+
+type Workspace = "graph" | "schema";
 
 export default function App() {
 	const [theme, setTheme] = createSignal<Theme>(detectInitialTheme());
-	const [workspace, setWorkspace] = createSignal<"soa" | "query">("soa");
+	const [workspace, setWorkspace] = createSignal<Workspace>("graph");
 	const [viewMode, setViewMode] = createSignal<"json" | "graph">("graph");
 	const [query, setQuery] = createSignal("g.V().hasLabel('Study').limit(20)");
 	const [queryType, setQueryType] = createSignal<"gremlin" | "cypher">(
@@ -40,9 +44,12 @@ export default function App() {
 		createSignal<GraphSelection>(null);
 	const [queryTime, setQueryTime] = createSignal(0);
 	const [currentEnv, setCurrentEnv] = createSignal("dev");
+	const [currentProfile, setCurrentProfile] = createSignal("");
 	let generation = 0;
 	let expansionGeneration = 0;
+
 	createEffect(() => applyTheme(theme()));
+
 	function clearResults() {
 		setJsonResult("");
 		setGraphElements([]);
@@ -53,30 +60,28 @@ export default function App() {
 		setExpanding(false);
 		++expansionGeneration;
 	}
+
 	async function cancel() {
 		++generation;
-		// Keep Run disabled until cancellation has reached Go, so a new query cannot
-		// accidentally inherit the context that is about to be cancelled.
 		try {
 			await DesktopService.CancelQueries();
-		} catch (e) {
-			setError(String(e));
+		} catch (cause) {
+			setError(String(cause));
 		} finally {
 			setLoading(false);
 		}
 	}
-	async function changeWorkspace(next: "soa" | "query") {
+
+	async function changeWorkspace(next: Workspace) {
 		if (next === workspace() || switching()) return;
-		setSwitching(true);
-		await cancel();
-		clearResults();
+		if (loading() || expanding()) await cancel();
 		setWorkspace(next);
-		setSwitching(false);
 	}
-	async function handleExecute() {
+
+	async function execute() {
 		if (loading() || switching() || !query().trim()) return;
-		const token = ++generation,
-			mode = viewMode();
+		const token = ++generation;
+		const mode = viewMode();
 		setLoading(true);
 		clearResults();
 		const start = performance.now();
@@ -99,9 +104,9 @@ export default function App() {
 				if (response.error) throw new Error(response.error);
 				setJsonResult(response.processed || "");
 			}
-		} catch (e) {
+		} catch (cause) {
 			if (token === generation)
-				setError(e instanceof Error ? e.message : String(e));
+				setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			if (token === generation) {
 				setQueryTime(performance.now() - start);
@@ -110,7 +115,7 @@ export default function App() {
 		}
 	}
 
-	async function handleExpand(
+	async function expand(
 		id: string,
 		options: Omit<ExpandVertexCommand, "id" | "type"> = {},
 	) {
@@ -134,10 +139,9 @@ export default function App() {
 				mergeGraphElements(current, response.elements),
 			);
 			setWarning(response.warning ?? "");
-		} catch (e) {
-			if (token === expansionGeneration) {
-				setError(e instanceof Error ? e.message : String(e));
-			}
+		} catch (cause) {
+			if (token === expansionGeneration)
+				setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			if (token === expansionGeneration) setExpanding(false);
 		}
@@ -151,15 +155,97 @@ export default function App() {
 	}
 
 	const labels = () => graphLabels(graphElements());
+	const queryResults = () => (
+		<div class="flex h-full min-h-0 flex-col">
+			<Show when={warning()}>
+				<p
+					role="status"
+					class="border-b border-base-300 px-5 py-2 text-xs text-warning"
+				>
+					{warning()}
+				</p>
+			</Show>
+			<div class="min-h-0 flex-1">
+				<Show
+					when={selectedElement() && viewMode() === "graph"}
+					fallback={
+						<ResultPanel
+							viewMode={viewMode}
+							jsonResult={jsonResult}
+							graphElements={graphElements}
+							error={error}
+							selectedElement={selectedElement}
+							setSelectedElement={setSelectedElement}
+							loading={() => loading() || expanding()}
+							onExpand={(id) => void expand(id)}
+							onClear={() => {
+								setGraphElements([]);
+								setSelectedElement(null);
+							}}
+						/>
+					}
+				>
+					<SplitPane
+						class="h-full"
+						direction="horizontal"
+						initialSize={340}
+						minSize={270}
+						minSecond={420}
+						sizedPane="second"
+						storageKey="nq-graph-details-width"
+						first={
+							<ResultPanel
+								viewMode={viewMode}
+								jsonResult={jsonResult}
+								graphElements={graphElements}
+								error={error}
+								selectedElement={selectedElement}
+								setSelectedElement={setSelectedElement}
+								loading={() => loading() || expanding()}
+								onExpand={(id) => void expand(id)}
+								onClear={() => {
+									setGraphElements([]);
+									setSelectedElement(null);
+								}}
+							/>
+						}
+						second={
+							<NodeDetail
+								element={selectedElement}
+								onClose={() => setSelectedElement(null)}
+								onRemove={removeSelectedElement}
+								onExpand={(options) => {
+									const selected = selectedElement();
+									if (selected?.group === "nodes")
+										void expand(selected.data.id, options);
+								}}
+								expanding={expanding}
+								nodeLabels={() => labels().nodeLabels}
+								relationshipLabels={() => labels().relationshipLabels}
+							/>
+						}
+					/>
+				</Show>
+			</div>
+			<StatusBar
+				queryTime={queryTime}
+				graphElements={graphElements}
+				error={error}
+				viewMode={viewMode}
+				env={currentEnv}
+			/>
+		</div>
+	);
+
 	return (
-		<div class="flex flex-col h-full bg-base-100 text-base-content text-sm">
-			<div class="titlebar flex items-center gap-3 pl-20 pr-5 h-10 bg-base-200/60 backdrop-blur-xl border-b border-base-300/30">
-				<h1 class="text-sm font-semibold tracking-tight select-none">
+		<div class="flex h-full flex-col bg-base-100 text-sm text-base-content">
+			<header class="titlebar flex h-10 items-center gap-3 border-b border-base-300/30 bg-base-200/60 pl-20 pr-5 backdrop-blur-xl">
+				<h1 class="select-none text-sm font-semibold">
 					<span class="text-base-content/60">d</span>
-					<span class="text-primary font-bold">Graph</span>
+					<span class="font-bold text-primary">Graph</span>
 					<span class="text-base-content/60">er</span>
 				</h1>
-				<div class="w-px h-4 bg-base-content/10" />
+				<div class="h-4 w-px bg-base-content/10" />
 				<ProfileSwitcher
 					onSwitchStart={async () => {
 						setSwitching(true);
@@ -167,42 +253,57 @@ export default function App() {
 						clearResults();
 					}}
 					onSwitchEnd={() => setSwitching(false)}
-					onProfileChange={(_profile, env) => setCurrentEnv(env)}
+					onProfileChange={(profile, env) => {
+						setCurrentProfile(profile || "default");
+						setCurrentEnv(env);
+					}}
 				/>
-				<div class="w-px h-4 bg-base-content/10" />
-				<nav class="flex gap-0.5 no-drag" aria-label="Workspace">
+				<div class="h-4 w-px bg-base-content/10" />
+				<nav class="no-drag flex gap-0.5" aria-label="Workspace">
 					<button
 						disabled={switching()}
-						class={`btn btn-xs ${workspace() === "soa" ? "btn-primary" : "btn-ghost"}`}
-						onClick={() => void changeWorkspace("soa")}
+						class={`btn btn-xs ${workspace() === "graph" ? "btn-primary" : "btn-ghost"}`}
+						onClick={() => void changeWorkspace("graph")}
 					>
-						Schedule of Activities
+						Graph
 					</button>
 					<button
 						disabled={switching()}
-						class={`btn btn-xs ${workspace() === "query" ? "btn-primary" : "btn-ghost"}`}
-						onClick={() => void changeWorkspace("query")}
+						class={`btn btn-xs ${workspace() === "schema" ? "btn-primary" : "btn-ghost"}`}
+						onClick={() => void changeWorkspace("schema")}
 					>
-						Query workspace
+						Schema
 					</button>
 				</nav>
 				<div class="flex-1" />
 				<ThemeSwitcher theme={theme} setTheme={setTheme} />
-			</div>
+			</header>
 			<Show
 				when={!switching()}
 				fallback={
-					<div role="status" class="p-8">
-						Switching…
+					<div role="status" class="grid flex-1 place-items-center">
+						<span class="loading loading-spinner loading-sm" />
 					</div>
 				}
 			>
 				<Show
-					when={workspace() === "soa"}
+					when={workspace() === "graph"}
 					fallback={
-						<>
-							<div class="flex flex-col gap-2 px-5 py-3 border-b border-base-300">
-								<div class="flex items-center gap-2 flex-wrap">
+						<Suspense fallback={<div class="p-4">Loading schema...</div>}>
+							<SchemaView profile={currentProfile} />
+						</Suspense>
+					}
+				>
+					<SplitPane
+						class="flex-1"
+						direction="vertical"
+						initialSize={205}
+						minSize={128}
+						minSecond={300}
+						storageKey="nq-query-editor-height"
+						first={
+							<div class="flex h-full flex-col gap-2 px-5 py-3">
+								<div class="flex flex-wrap items-center gap-2">
 									<SavedQueries
 										onSelect={(sample) => {
 											setQuery(sample.query);
@@ -212,7 +313,7 @@ export default function App() {
 										}}
 										disabled={loading()}
 									/>
-									<div class="w-px h-4 bg-base-content/10" />
+									<div class="h-4 w-px bg-base-content/10" />
 									<QueryToolbar
 										queryType={queryType}
 										setQueryType={setQueryType}
@@ -221,75 +322,24 @@ export default function App() {
 										query={query}
 										setQuery={setQuery}
 										loading={loading}
-										onExecute={handleExecute}
+										onExecute={execute}
 										onCancel={() => void cancel()}
 									/>
 								</div>
-								<Suspense fallback={<p>Loading editor…</p>}>
-									<QueryEditor
-										query={query}
-										setQuery={setQuery}
-										queryType={queryType}
-										onExecute={handleExecute}
-									/>
-								</Suspense>
-							</div>
-							<Show when={warning()}>
-								<p role="status" class="px-5 py-2 text-xs text-warning">
-									{warning()}
-								</p>
-							</Show>
-							<div class="flex flex-1 min-h-0 overflow-hidden">
-								<div class="flex-1 min-w-0 overflow-hidden">
-									<ResultPanel
-										viewMode={viewMode}
-										jsonResult={jsonResult}
-										graphElements={graphElements}
-										error={error}
-										selectedElement={selectedElement}
-										setSelectedElement={setSelectedElement}
-										loading={() => loading() || expanding()}
-										onExpand={(id) => void handleExpand(id)}
-										onClear={() => {
-											setGraphElements([]);
-											setSelectedElement(null);
-										}}
-									/>
-								</div>
-								<Show when={selectedElement()}>
-									<div class="w-80 shrink-0 border-l border-base-300 overflow-auto">
-										<NodeDetail
-											element={selectedElement}
-											onClose={() => setSelectedElement(null)}
-											onRemove={removeSelectedElement}
-											onExpand={(options) => {
-												const selected = selectedElement();
-												if (selected?.group === "nodes") {
-													void handleExpand(selected.data.id, options);
-												}
-											}}
-											expanding={expanding}
-											nodeLabels={() => labels().nodeLabels}
-											relationshipLabels={() => labels().relationshipLabels}
+								<div class="min-h-0 flex-1">
+									<Suspense fallback={<p>Loading editor...</p>}>
+										<QueryEditor
+											query={query}
+											setQuery={setQuery}
+											queryType={queryType}
+											onExecute={execute}
 										/>
-									</div>
-								</Show>
+									</Suspense>
+								</div>
 							</div>
-							<StatusBar
-								queryTime={queryTime}
-								graphElements={graphElements}
-								error={error}
-								viewMode={viewMode}
-								env={currentEnv}
-							/>
-						</>
-					}
-				>
-					<div class="flex-1 min-h-0">
-						<Suspense fallback={<p class="p-4">Loading schedule explorer…</p>}>
-							<SoAMatrix />
-						</Suspense>
-					</div>
+						}
+						second={queryResults()}
+					/>
 				</Show>
 			</Show>
 		</div>

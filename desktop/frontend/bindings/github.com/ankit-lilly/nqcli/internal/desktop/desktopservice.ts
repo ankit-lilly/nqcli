@@ -7,6 +7,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "/wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as schema$0 from "../schema/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
 /**
@@ -32,20 +36,16 @@ export function GetProfile(): $CancellablePromise<$models.ProfileInfo> {
     return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetProfile");
 }
 
-export function GetSoA(req: $models.SoASelection): $CancellablePromise<$models.DataResponse> {
-    return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetSoA", req);
+/**
+ * GetSchema returns cached schema data immediately and revalidates it in the
+ * background when absent, stale, or explicitly refreshed.
+ */
+export function GetSchema(req: $models.SchemaRequest): $CancellablePromise<schema$0.Snapshot> {
+    return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetSchema", req);
 }
 
 export function GetVertexProperties(req: $models.VertexPropsRequest): $CancellablePromise<$models.VertexPropsResponse> {
     return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetVertexProperties", req);
-}
-
-export function ListStudies(req: $models.StudySearch): $CancellablePromise<$models.DataResponse> {
-    return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.ListStudies", req);
-}
-
-export function ListVersions(req: $models.StudySelection): $CancellablePromise<$models.DataResponse> {
-    return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.ListVersions", req);
 }
 
 export function SwitchProfile(req: $models.ProfileRequest): $CancellablePromise<$models.ProfileResponse> {

@@ -19,6 +19,7 @@
         "cytoscape-dagre": "^2.5.0",
         "daisyui": "^5.7.28",
         "highlight.js": "^11.11.0",
+        "lucide-solid": "^1.45.0",
         "solid-js": "^1.9.0",
       },
       "devDependencies": {
@@ -344,6 +345,8 @@
     "lodash": ["lodash@4.18.1", "https://elilillyco.jfrog.io/elilillyco/api/npm/Lilly-NPM/lodash/-/lodash-4.18.1.tgz", {}, "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q=="],
 
     "lru-cache": ["lru-cache@5.1.1", "https://elilillyco.jfrog.io/elilillyco/api/npm/Lilly-NPM/lru-cache/-/lru-cache-5.1.1.tgz", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
+
+    "lucide-solid": ["lucide-solid@1.45.0", "https://elilillyco.jfrog.io/elilillyco/api/npm/Lilly-NPM/lucide-solid/-/lucide-solid-1.45.0.tgz", { "peerDependencies": { "solid-js": "^1.4.7" } }, "sha512-aNhW4zWzRpBjpFVCAwXvpzkoCNpYrBkuPq3Fb9qsOkr3H83jJH+gaabgQL+nB7hv3qa2S+vT8qg2Lk8+kldbsQ=="],
 
     "magic-string": ["magic-string@0.30.21", "https://elilillyco.jfrog.io/elilillyco/api/npm/Lilly-NPM/magic-string/-/magic-string-0.30.21.tgz", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 

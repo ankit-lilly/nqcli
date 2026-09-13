@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ankit-lilly/nqcli/internal/core"
+	graphschema "github.com/ankit-lilly/nqcli/internal/schema"
 )
 
 type ServiceFactory func(ctx context.Context, profile string) (core.QueryService, error)
@@ -45,6 +46,10 @@ type ProfileResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+type SchemaRequest struct {
+	Refresh bool `json:"refresh"`
+}
+
 type DesktopService struct {
 	svc       core.QueryService
 	ctx       context.Context
@@ -54,11 +59,15 @@ type DesktopService struct {
 	switchMu  sync.Mutex
 	cancel    context.CancelFunc
 	lifecycle context.Context
+	schema    *graphschema.Service
 }
 
 func NewDesktopService(svc core.QueryService, profile string, factory ServiceFactory) *DesktopService {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &DesktopService{svc: svc, profile: profile, factory: factory, ctx: ctx, cancel: cancel, lifecycle: context.Background()}
+	return &DesktopService{
+		svc: svc, profile: profile, factory: factory, ctx: ctx, cancel: cancel,
+		lifecycle: context.Background(), schema: graphschema.NewService(nil),
+	}
 }
 
 //wails:ignore
@@ -164,6 +173,18 @@ func (d *DesktopService) ExecuteGraphQuery(req QueryRequest) GraphResponse {
 	}
 	elements, warning := boundGraph(elements)
 	return GraphResponse{Elements: elements, Warning: warning}
+}
+
+// GetSchema returns cached schema data immediately and revalidates it in the
+// background when absent, stale, or explicitly refreshed.
+func (d *DesktopService) GetSchema(req SchemaRequest) graphschema.Snapshot {
+	d.mu.RLock()
+	svc, ctx, key := d.svc, d.ctx, d.profile
+	d.mu.RUnlock()
+	if key == "" {
+		key = "default"
+	}
+	return d.schema.Revalidate(ctx, key, svc, req.Refresh)
 }
 
 type VertexPropsRequest struct {

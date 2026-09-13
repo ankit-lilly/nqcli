@@ -1,111 +1,125 @@
-import {
-	type Accessor,
-	type Setter,
-	onMount,
-	onCleanup,
-	createEffect,
-	createSignal,
-	untrack,
-} from "solid-js";
 import { CytoscapeSurface } from "@nq/graph-surface";
 import cytoscape, { type Core } from "cytoscape";
 import dagre from "cytoscape-dagre";
+import {
+	Download,
+	Maximize2,
+	Minimize2,
+	RotateCcw,
+	Scan,
+	SlidersHorizontal,
+	Trash2,
+	ZoomIn,
+	ZoomOut,
+} from "lucide-solid";
+import {
+	For,
+	Show,
+	type Accessor,
+	type Setter,
+	createEffect,
+	createMemo,
+	createSignal,
+	onCleanup,
+	onMount,
+	untrack,
+} from "solid-js";
+import { createStore } from "solid-js/store";
 import type {
 	GraphElement,
 	GraphElementData,
 	GraphSelection,
 } from "../domain/graph";
+import { DEFAULT_NODE_COLOR, NODE_LABEL_COLORS } from "../domain/graph-style";
 
 cytoscape.use(dagre);
 
-// Weak keys let replaced result arrays and their positions be collected.
-const layoutsByResult = new WeakMap<
-	GraphElement[],
-	{
-		positions: Record<string, { x: number; y: number }>;
-		zoom: number;
-		pan: { x: number; y: number };
-		layout: string;
-	}
->();
-
-const LABEL_COLORS: Record<string, string> = {
-	Study: "#4A90D9",
-	StudyVersion: "#7B68EE",
-	InterventionalStudyDesign: "#E67E22",
-	ObservationalStudyDesign: "#E67E22",
-	StudyEpoch: "#27AE60",
-	Encounter: "#E74C3C",
-	Activity: "#F39C12",
-	ScheduleTimeline: "#1ABC9C",
-	BiomedicalConcept: "#9B59B6",
-	Code: "#95A5A6",
-	AliasCode: "#7F8C8D",
-	StudyIdentifier: "#2980B9",
-	StudyTitle: "#8E44AD",
-	Organization: "#16A085",
-	Amendment: "#C0392B",
-	SubjectEnrollment: "#D35400",
-	ScheduledActivityInstance: "#2C3E50",
-	StudyArm: "#E74C3C",
-	StudyCell: "#3498DB",
-	StudyElement: "#1ABC9C",
-	StudyDesignPopulation: "#9B59B6",
-	EligibilityCriterion: "#F1C40F",
-	Timing: "#34495E",
-	Condition: "#7F8C8D",
-	StudySite: "#27AE60",
+type LayoutState = {
+	positions: Record<string, { x: number; y: number }>;
+	zoom: number;
+	pan: { x: number; y: number };
+	layout: string;
 };
 
+const layoutsByResult = new WeakMap<GraphElement[], LayoutState>();
+
+const NODE_LABEL_CLASS = "show-node-labels";
 const EDGE_LABEL_CLASS = "show-edge-labels";
 const LATEST_EDGE_CLASS = "latest-version-edge";
+
+const layouts = [
+	{
+		key: "dagre-tb",
+		label: "Top-down",
+		name: "dagre",
+		opts: { rankDir: "TB" },
+	},
+	{
+		key: "dagre-lr",
+		label: "Left-right",
+		name: "dagre",
+		opts: { rankDir: "LR" },
+	},
+	{
+		key: "cose",
+		label: "Force",
+		name: "cose",
+		opts: { nodeRepulsion: () => 4500, idealEdgeLength: () => 80 },
+	},
+	{ key: "grid", label: "Grid", name: "grid", opts: {} },
+	{ key: "circle", label: "Circle", name: "circle", opts: {} },
+];
 
 interface Props {
 	elements: Accessor<GraphElement[]>;
 	selectedElement: Accessor<GraphSelection>;
 	setSelectedElement: Setter<GraphSelection>;
-	onExpand: (id: string) => void;
-	onClear: () => void;
+	onExpand?: (id: string) => void;
+	onClear?: () => void;
+	emptyMessage?: string;
 }
 
 function resolveHex(varName: string, fallback: string): string {
-	const el = document.createElement("div");
-	el.style.color = `var(${varName})`;
-	el.style.display = "none";
-	document.body.appendChild(el);
-	const computed = getComputedStyle(el).color;
-	document.body.removeChild(el);
-	if (!computed || computed === "") return fallback;
+	const element = document.createElement("div");
+	element.style.color = `var(${varName})`;
+	element.style.display = "none";
+	document.body.appendChild(element);
+	const computed = getComputedStyle(element).color;
+	element.remove();
 	const match = computed.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
 	if (!match) return fallback;
-	const [, r, g, b] = match;
-	return `#${Number(r).toString(16).padStart(2, "0")}${Number(g).toString(16).padStart(2, "0")}${Number(b).toString(16).padStart(2, "0")}`;
+	return `#${match
+		.slice(1, 4)
+		.map((part) => Number(part).toString(16).padStart(2, "0"))
+		.join("")}`;
 }
 
-function mixHex(hex: string, alpha: number, bgHex: string): string {
-	const parse = (h: string) => [
-		parseInt(h.slice(1, 3), 16),
-		parseInt(h.slice(3, 5), 16),
-		parseInt(h.slice(5, 7), 16),
+function mixHex(hex: string, alpha: number, background: string): string {
+	const parse = (value: string) => [
+		Number.parseInt(value.slice(1, 3), 16),
+		Number.parseInt(value.slice(3, 5), 16),
+		Number.parseInt(value.slice(5, 7), 16),
 	];
-	const fg = parse(hex);
-	const bg = parse(bgHex);
-	const mix = fg.map((f, i) => Math.round(f * alpha + bg[i] * (1 - alpha)));
-	return `#${mix.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+	const foreground = parse(hex);
+	const bg = parse(background);
+	return `#${foreground
+		.map((value, index) =>
+			Math.round(value * alpha + bg[index] * (1 - alpha))
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("")}`;
 }
 
 function themeColors() {
-	const bg = resolveHex("--color-base-100", "#ffffff");
+	const background = resolveHex("--color-base-100", "#ffffff");
 	const content = resolveHex("--color-base-content", "#333333");
 	return {
-		bg,
+		background,
 		content,
-		edgeLine: mixHex(content, 0.2, bg),
-		edgeText: mixHex(content, 0.55, bg),
-		edgeOutline: bg,
-		nodeText: content,
-		nodeOutline: bg,
-		nodeBorder: mixHex(content, 0.1, bg),
+		edgeLine: mixHex(content, 0.24, background),
+		edgeText: mixHex(content, 0.62, background),
+		nodeBorder: mixHex(content, 0.14, background),
 	};
 }
 
@@ -113,18 +127,35 @@ export default function GraphView(props: Props) {
 	let containerRef!: HTMLDivElement;
 	let surface: CytoscapeSurface | undefined;
 	let cy: Core | undefined;
-	const [activeLayout, setActiveLayout] = createSignal("dagre-tb");
-	const [edgeLabels, setEdgeLabels] = createSignal(false);
-	const [themeKey, setThemeKey] = createSignal(0);
 	let currentElements: GraphElement[] | undefined;
-	let resizeFrame = 0;
-	let resizeObserver: ResizeObserver | undefined;
 	let activeCyLayout: ReturnType<Core["layout"]> | undefined;
+	let resizeObserver: ResizeObserver | undefined;
+	let resizeFrame = 0;
+	const [activeLayout, setActiveLayout] = createSignal("dagre-tb");
+	const [fullscreen, setFullscreen] = createSignal(false);
+	const [themeKey, setThemeKey] = createSignal(0);
+	const [rendering, setRendering] = createStore({
+		nodeLabels: true,
+		edgeLabels: false,
+		topologySizing: true,
+		edgeCurve: "bezier" as "bezier" | "straight" | "taxi",
+	});
+
+	const legend = createMemo(() => {
+		const labels = new Set<string>();
+		for (const element of props.elements()) {
+			if (element.group === "nodes" && typeof element.data.label === "string") {
+				labels.add(element.data.label);
+			}
+		}
+		return [...labels].sort();
+	});
+
 	function savePositions() {
 		if (!cy || !currentElements) return;
-		const positions: Record<string, { x: number; y: number }> = {};
-		cy.nodes().forEach((n) => {
-			positions[n.id()] = { ...n.position() };
+		const positions: LayoutState["positions"] = {};
+		cy.nodes().forEach((node) => {
+			positions[node.id()] = { ...node.position() };
 		});
 		layoutsByResult.set(currentElements, {
 			positions,
@@ -134,20 +165,11 @@ export default function GraphView(props: Props) {
 		});
 	}
 
-	onMount(() => {
-		const observer = new MutationObserver(() => setThemeKey((k) => k + 1));
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
-		onCleanup(() => observer.disconnect());
-	});
-
 	const cyStyle: any[] = [
 		{
 			selector: "node",
 			style: {
-				label: "data(displayName)",
+				label: "",
 				"text-valign": "bottom",
 				"text-halign": "center",
 				"text-margin-y": 6,
@@ -158,14 +180,15 @@ export default function GraphView(props: Props) {
 				"min-zoomed-font-size": 8,
 				width: 50,
 				height: 50,
-				"background-color": "#7f8c8d",
-				color: "#333",
+				"background-color": "#64748b",
 				"text-outline-width": 2,
-				"text-outline-color": "#fff",
 				"border-width": 2,
-				"border-color": "#eee",
 				"overlay-padding": 6,
 			},
+		},
+		{
+			selector: `node.${NODE_LABEL_CLASS}`,
+			style: { label: "data(displayName)" },
 		},
 		{
 			selector: "edge",
@@ -183,60 +206,53 @@ export default function GraphView(props: Props) {
 				"text-margin-y": -8,
 				"text-background-opacity": 0,
 				"text-background-padding": 2,
-				"text-background-shape": "round-rectangle",
-				"line-color": "#ccc",
-				"target-arrow-color": "#ccc",
-				width: 1.5,
-				color: "#888",
 				"text-outline-width": 3,
-				"text-outline-color": "#fff",
-				"text-outline-opacity": 1,
+				width: 1.5,
 				opacity: 0.9,
 			},
 		},
 		{
 			selector: `edge.${EDGE_LABEL_CLASS}`,
-			style: {
-				label: "data(label)",
-				"text-background-opacity": 1,
-			},
+			style: { label: "data(label)", "text-background-opacity": 1 },
 		},
 		{
 			selector: `edge.${LATEST_EDGE_CLASS}`,
-			style: {
-				width: 2.75,
-				"line-style": "dashed",
-				"arrow-scale": 1.1,
-			},
+			style: { width: 2.75, "line-style": "dashed", "arrow-scale": 1.1 },
 		},
 		{
 			selector: "node:selected",
 			style: {
 				"border-width": 3,
-				"border-color": "#FFD700",
-				"overlay-color": "#FFD700",
-				"overlay-opacity": 0.08,
+				"border-color": "#f5b82e",
+				"overlay-color": "#f5b82e",
+				"overlay-opacity": 0.1,
 			},
 		},
 		{
 			selector: "edge:selected",
 			style: {
 				width: 3,
-				"line-color": "#E6B84A",
-				"target-arrow-color": "#E6B84A",
-				"overlay-color": "#E6B84A",
-				"overlay-opacity": 0.08,
-			},
-		},
-		{
-			selector: "node:active",
-			style: {
-				"overlay-opacity": 0.04,
+				"line-color": "#e6a817",
+				"target-arrow-color": "#e6a817",
+				"overlay-color": "#e6a817",
+				"overlay-opacity": 0.1,
 			},
 		},
 	];
 
 	onMount(() => {
+		const themeObserver = new MutationObserver(() =>
+			setThemeKey((key) => key + 1),
+		);
+		themeObserver.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["data-theme"],
+		});
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setFullscreen(false);
+		};
+		window.addEventListener("keydown", onKeyDown);
+
 		surface = new CytoscapeSurface(
 			{
 				layout: { name: "preset" },
@@ -260,205 +276,143 @@ export default function GraphView(props: Props) {
 					}),
 				onCanvasClick: () => props.setSelectedElement(null),
 				onNodeDoubleClick: (data) => {
-					if (typeof data.id === "string") props.onExpand(data.id);
+					if (props.onExpand && typeof data.id === "string")
+						props.onExpand(data.id);
 				},
 			},
 		);
 		surface.mount(containerRef);
 		cy = surface.cytoscape;
 		cy?.style(cyStyle);
-
 		resizeObserver = new ResizeObserver(() => {
 			cancelAnimationFrame(resizeFrame);
 			resizeFrame = requestAnimationFrame(() => cy?.resize());
 		});
 		resizeObserver.observe(containerRef);
+
+		onCleanup(() => {
+			savePositions();
+			activeCyLayout?.stop();
+			resizeObserver?.disconnect();
+			cancelAnimationFrame(resizeFrame);
+			themeObserver.disconnect();
+			window.removeEventListener("keydown", onKeyDown);
+			surface?.destroy();
+			cy = undefined;
+		});
 	});
 
-	onCleanup(() => {
-		savePositions();
-		activeCyLayout?.stop();
-		resizeObserver?.disconnect();
-		cancelAnimationFrame(resizeFrame);
-		surface?.destroy();
-		cy = undefined;
-	});
-
-	function applyThemeColors() {
+	function applyRendering() {
 		if (!cy) return;
-		const tc = themeColors();
+		const colors = themeColors();
 		cy.batch(() => {
-			cy!.nodes().style({
-				color: tc.nodeText,
-				"text-outline-color": tc.nodeOutline,
-				"border-color": tc.nodeBorder,
+			cy!.nodes().forEach((node) => {
+				const inDegree = node.indegree(false);
+				const outDegree = node.outdegree(false);
+				const degree = inDegree + outDegree;
+				const emphasizeRoot =
+					rendering.topologySizing && inDegree === 0 && outDegree > 0;
+				const emphasizeLeaf = rendering.topologySizing && outDegree === 0;
+				const size = emphasizeRoot
+					? Math.min(80, 55 + outDegree * 4)
+					: emphasizeLeaf
+						? 30
+						: rendering.topologySizing
+							? Math.min(65, 38 + degree * 3)
+							: 48;
+				node.toggleClass(NODE_LABEL_CLASS, rendering.nodeLabels);
+				node.style({
+					"background-color":
+						NODE_LABEL_COLORS[String(node.data("label"))] ?? DEFAULT_NODE_COLOR,
+					shape: emphasizeRoot ? "diamond" : "ellipse",
+					width: size,
+					height: size,
+					"font-size": emphasizeRoot ? "15px" : emphasizeLeaf ? "11px" : "13px",
+					"font-weight": emphasizeRoot ? 700 : emphasizeLeaf ? 400 : 600,
+					"border-width": node.selected()
+						? 3
+						: emphasizeRoot
+							? 3
+							: emphasizeLeaf
+								? 1
+								: 2,
+					color: colors.content,
+					"text-outline-color": colors.background,
+					"border-color": node.selected() ? "#f5b82e" : colors.nodeBorder,
+				});
 			});
-			cy!.edges().style({
-				"line-color": tc.edgeLine,
-				"target-arrow-color": tc.edgeLine,
-				color: tc.edgeText,
-				"text-background-color": tc.edgeOutline,
-				"text-outline-color": tc.edgeOutline,
+			cy!.edges().forEach((edge) => {
+				edge.toggleClass(EDGE_LABEL_CLASS, rendering.edgeLabels);
+				edge.toggleClass(
+					LATEST_EDGE_CLASS,
+					edge.data("label") === "has_latest_version",
+				);
+				const lineColor = edge.selected() ? "#e6a817" : colors.edgeLine;
+				edge.style({
+					"curve-style": rendering.edgeCurve,
+					"line-color": lineColor,
+					"target-arrow-color": lineColor,
+					width: edge.selected()
+						? 3
+						: edge.data("label") === "has_latest_version"
+							? 2.75
+							: 1.5,
+					color: colors.edgeText,
+					"text-background-color": colors.background,
+					"text-outline-color": colors.background,
+				});
 			});
 		});
 	}
 
-	function applyEdgeRendering(showLabels: boolean) {
-		if (!cy) return;
-		const edges = cy!.edges();
-		edges.toggleClass(EDGE_LABEL_CLASS, showLabels);
-		edges.forEach((edge) => {
-			edge.toggleClass(
-				LATEST_EDGE_CLASS,
-				edge.data("label") === "has_latest_version",
-			);
-		});
-	}
-
-	// Theme change — only recolor, preserve layout
 	createEffect(() => {
-		const _theme = themeKey();
-		applyThemeColors();
+		themeKey();
+		applyRendering();
 	});
 
-	// Reconcile by ID and restore positions on view remount.
 	createEffect(() => {
-		const elems = props.elements();
+		const elements = props.elements();
 		if (!cy) return;
-
 		savePositions();
-		currentElements = elems;
+		currentElements = elements;
 		activeCyLayout?.stop();
-		if (!elems || elems.length === 0) {
+		if (elements.length === 0) {
 			cy.elements().remove();
 			return;
 		}
-		const saved = layoutsByResult.get(elems);
-
-		const tc = themeColors();
-		const showEdgeLabels = untrack(edgeLabels);
-
+		const saved = layoutsByResult.get(elements);
 		cy.batch(() => {
-			const incoming = new Set(elems.map((el) => String(el.data.id)));
+			const incoming = new Set(elements.map((element) => element.data.id));
 			cy!
 				.elements()
-				.filter((el) => !incoming.has(el.id()))
+				.filter((element) => !incoming.has(element.id()))
 				.remove();
-			for (const el of elems) {
+			for (const element of elements) {
 				const data = {
-					...el.data,
+					...element.data,
 					displayName: String(
-						el.data.name || el.data.decode || el.data.label || "",
+						element.data.name ||
+							element.data.decode ||
+							element.data.label ||
+							"",
 					).slice(0, 60),
 				};
-				const existing = cy!.getElementById(String(el.data.id));
+				const existing = cy!.getElementById(element.data.id);
 				if (existing.length) existing.data(data);
-				else cy!.add({ group: el.group, data } as any);
+				else cy!.add({ group: element.group, data } as any);
 			}
-
-			// All styling in one batch: label colors, topology, theme
-			const labelColorMap = new Map(Object.entries(LABEL_COLORS));
-			cy!.nodes().forEach((node) => {
-				const lbl = node.data("label") as string;
-				const bg = labelColorMap.get(lbl) || "#7f8c8d";
-
-				const inDeg = node.indegree(false);
-				const outDeg = node.outdegree(false);
-				const total = inDeg + outDeg;
-
-				let shape = "ellipse";
-				let size = Math.min(65, 38 + total * 3);
-				let fontSize = "13px";
-				let fontWeight = 600;
-				let borderWidth = 2;
-				let textMarginY = 6;
-
-				if (inDeg === 0 && outDeg > 0) {
-					shape = "diamond";
-					size = Math.min(80, 55 + outDeg * 4);
-					fontSize = "15px";
-					fontWeight = 700;
-					borderWidth = 3;
-					textMarginY = 8;
-				} else if (outDeg === 0) {
-					size = 30;
-					fontSize = "11px";
-					fontWeight = 400;
-					borderWidth = 1;
-					textMarginY = 4;
-				}
-
-				node.style({
-					"background-color": bg,
-					shape,
-					width: size,
-					height: size,
-					"font-size": fontSize,
-					"font-weight": fontWeight,
-					"border-width": borderWidth,
-					"text-margin-y": textMarginY,
-					color: tc.nodeText,
-					"text-outline-color": tc.nodeOutline,
-					"border-color": tc.nodeBorder,
-				});
-			});
-
-			cy!.edges().style({
-				"line-color": tc.edgeLine,
-				"target-arrow-color": tc.edgeLine,
-				color: tc.edgeText,
-				"text-background-color": tc.edgeOutline,
-				"text-outline-color": tc.edgeOutline,
-			});
-			applyEdgeRendering(showEdgeLabels);
 		});
-
+		applyRendering();
 		if (saved) {
 			cy.nodes().positions(
-				(node) => saved.positions[node.id()] || { x: 0, y: 0 },
+				(node) => saved.positions[node.id()] ?? { x: 0, y: 0 },
 			);
 			cy.zoom(saved.zoom);
 			cy.pan(saved.pan);
 			setActiveLayout(saved.layout);
 		} else {
-			const small = cy.nodes().length <= 150;
-			activeCyLayout = cy.layout({
-				name: small ? "dagre" : "grid",
-				rankDir: "TB",
-				nodeSep: 60,
-				rankSep: 80,
-				fit: true,
-				padding: 40,
-				animate: false,
-			} as any);
-			activeCyLayout.run();
-			setActiveLayout(small ? "dagre-tb" : "grid");
+			runLayout(cy.nodes().length <= 150 ? "dagre-tb" : "grid", false);
 		}
-	});
-
-	function runLayout(
-		key: string,
-		name: string,
-		opts: Record<string, any> = {},
-	) {
-		if (!cy) return;
-		setActiveLayout(key);
-		const count = cy.elements().length;
-		activeCyLayout?.stop();
-		activeCyLayout = cy.layout({
-			name,
-			fit: true,
-			padding: 40,
-			animate: count < 100,
-			animationDuration: 250,
-			animationEasing: "ease-out",
-			...opts,
-		} as any);
-		activeCyLayout.run();
-	}
-
-	createEffect(() => {
-		applyEdgeRendering(edgeLabels());
 	});
 
 	createEffect(() => {
@@ -468,98 +422,205 @@ export default function GraphView(props: Props) {
 			edgeIds: new Set(selected?.group === "edges" ? [selected.data.id] : []),
 			groupIds: new Set(),
 		});
+		applyRendering();
 	});
-	const layouts = [
-		{
-			key: "dagre-tb",
-			label: "Top-Down",
-			name: "dagre",
-			opts: { rankDir: "TB" },
-		},
-		{
-			key: "dagre-lr",
-			label: "Left-Right",
-			name: "dagre",
-			opts: { rankDir: "LR" },
-		},
-		{
-			key: "cose",
-			label: "Force",
-			name: "cose",
-			opts: { nodeRepulsion: () => 4500, idealEdgeLength: () => 80 },
-		},
-		{ key: "grid", label: "Grid", name: "grid", opts: {} },
-		{ key: "circle", label: "Circle", name: "circle", opts: {} },
-	];
 
+	function runLayout(key = activeLayout(), animate = true) {
+		if (!cy) return;
+		const layout =
+			layouts.find((candidate) => candidate.key === key) ?? layouts[0];
+		setActiveLayout(layout.key);
+		activeCyLayout?.stop();
+		activeCyLayout = cy.layout({
+			name: layout.name,
+			fit: true,
+			padding: 40,
+			animate: animate && cy.elements().length < 100,
+			animationDuration: 250,
+			animationEasing: "ease-out",
+			...layout.opts,
+		} as any);
+		activeCyLayout.run();
+	}
+
+	function exportPNG() {
+		const blob = surface?.exportPNG();
+		if (!blob) return;
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement("a");
+		anchor.href = url;
+		anchor.download = "nq-graph.png";
+		anchor.click();
+		URL.revokeObjectURL(url);
+	}
+
+	const iconButton = "btn btn-xs btn-ghost btn-square";
 	return (
-		<div class="graph-container">
-			<div class="flex items-center gap-1.5 px-3 py-2 border-b border-base-300">
-				{layouts.map((l) => (
-					<button
-						onClick={() => runLayout(l.key, l.name, l.opts)}
-						class={`btn btn-xs ${activeLayout() === l.key ? "btn-primary" : "btn-ghost"}`}
-					>
-						{l.label}
-					</button>
-				))}
-				<label class="text-xs flex gap-1 items-center">
-					<input
-						type="checkbox"
-						checked={edgeLabels()}
-						onChange={(e) => setEdgeLabels(e.currentTarget.checked)}
-					/>
-					Edge labels
-				</label>
-				<div class="ml-auto" />
+		<div
+			class={`graph-container bg-base-100 ${fullscreen() ? "fixed inset-0 z-50" : ""}`}
+		>
+			<div class="flex items-center gap-1 px-3 py-2 border-b border-base-300 min-h-11">
+				<select
+					class="select select-bordered select-xs w-32"
+					value={activeLayout()}
+					onChange={(event) => runLayout(event.currentTarget.value)}
+					aria-label="Graph layout"
+				>
+					<For each={layouts}>
+						{(layout) => <option value={layout.key}>{layout.label}</option>}
+					</For>
+				</select>
 				<button
-					onClick={() => surface?.zoomOut()}
-					class="btn btn-xs btn-ghost btn-square"
+					class={iconButton}
+					title="Re-run layout"
+					aria-label="Re-run layout"
+					onClick={() => runLayout()}
+				>
+					<RotateCcw size={15} />
+				</button>
+				<details class="dropdown">
+					<summary
+						class={iconButton}
+						title="Rendering options"
+						aria-label="Rendering options"
+					>
+						<SlidersHorizontal size={15} />
+					</summary>
+					<div class="dropdown-content z-30 mt-2 w-56 border border-base-300 bg-base-100 p-3 shadow-lg">
+						<div class="text-xs font-semibold mb-2">Rendering</div>
+						<label class="flex items-center justify-between py-1 text-xs">
+							<span>Node labels</span>
+							<input
+								type="checkbox"
+								class="toggle toggle-xs"
+								checked={rendering.nodeLabels}
+								onChange={(event) =>
+									setRendering("nodeLabels", event.currentTarget.checked)
+								}
+							/>
+						</label>
+						<label class="flex items-center justify-between py-1 text-xs">
+							<span>Edge labels</span>
+							<input
+								type="checkbox"
+								class="toggle toggle-xs"
+								checked={rendering.edgeLabels}
+								onChange={(event) =>
+									setRendering("edgeLabels", event.currentTarget.checked)
+								}
+							/>
+						</label>
+						<label class="flex items-center justify-between py-1 text-xs">
+							<span>Size by topology</span>
+							<input
+								type="checkbox"
+								class="toggle toggle-xs"
+								checked={rendering.topologySizing}
+								onChange={(event) =>
+									setRendering("topologySizing", event.currentTarget.checked)
+								}
+							/>
+						</label>
+						<label class="block pt-2 text-xs">
+							<span class="block mb-1 text-base-content/60">Edge routing</span>
+							<select
+								class="select select-bordered select-xs w-full"
+								value={rendering.edgeCurve}
+								onChange={(event) =>
+									setRendering(
+										"edgeCurve",
+										event.currentTarget.value as typeof rendering.edgeCurve,
+									)
+								}
+							>
+								<option value="bezier">Curved</option>
+								<option value="straight">Straight</option>
+								<option value="taxi">Orthogonal</option>
+							</select>
+						</label>
+					</div>
+				</details>
+				<details class="dropdown">
+					<summary class="btn btn-xs btn-ghost">Legend</summary>
+					<div class="dropdown-content z-30 mt-2 max-h-72 w-64 overflow-auto border border-base-300 bg-base-100 p-3 shadow-lg">
+						<For each={legend()}>
+							{(label) => (
+								<div class="flex items-center gap-2 py-1 text-xs">
+									<span
+										class="size-3 shrink-0 rounded-full"
+										style={{
+											"background-color":
+												NODE_LABEL_COLORS[label] ?? DEFAULT_NODE_COLOR,
+										}}
+									/>
+									<span class="truncate">{label}</span>
+								</div>
+							)}
+						</For>
+					</div>
+				</details>
+				<div class="flex-1" />
+				<button
+					class={iconButton}
 					title="Zoom out"
 					aria-label="Zoom out"
+					onClick={() => surface?.zoomOut()}
 				>
-					−
+					<ZoomOut size={15} />
 				</button>
 				<button
-					onClick={() => surface?.zoomIn()}
-					class="btn btn-xs btn-ghost btn-square"
+					class={iconButton}
 					title="Zoom in"
 					aria-label="Zoom in"
+					onClick={() => surface?.zoomIn()}
 				>
-					+
+					<ZoomIn size={15} />
 				</button>
 				<button
+					class={iconButton}
+					title="Zoom to fit"
+					aria-label="Zoom to fit"
 					onClick={() => surface?.fit(40)}
-					class="btn btn-xs btn-ghost"
-					title="Zoom to fit all elements"
 				>
-					Fit
+					<Scan size={15} />
 				</button>
 				<button
-					onClick={() => {
-						const blob = surface?.exportPNG();
-						if (!blob) return;
-						const url = URL.createObjectURL(blob);
-						const anchor = document.createElement("a");
-						anchor.href = url;
-						anchor.download = "nq-graph.png";
-						anchor.click();
-						URL.revokeObjectURL(url);
-					}}
-					class="btn btn-xs btn-ghost"
-					title="Export graph as PNG"
+					class={iconButton}
+					title="Export PNG"
+					aria-label="Export PNG"
+					onClick={exportPNG}
 				>
-					Export
+					<Download size={15} />
 				</button>
+				<Show when={props.onClear}>
+					<button
+						class={`${iconButton} text-error`}
+						title="Clear graph"
+						aria-label="Clear graph"
+						onClick={props.onClear}
+					>
+						<Trash2 size={15} />
+					</button>
+				</Show>
 				<button
-					onClick={props.onClear}
-					class="btn btn-xs btn-ghost text-error"
-					title="Clear graph"
+					class={iconButton}
+					title={fullscreen() ? "Exit full screen" : "Full screen"}
+					aria-label={fullscreen() ? "Exit full screen" : "Full screen"}
+					onClick={() => setFullscreen((value) => !value)}
 				>
-					Clear
+					<Show when={fullscreen()} fallback={<Maximize2 size={15} />}>
+						<Minimize2 size={15} />
+					</Show>
 				</button>
 			</div>
-			<div ref={containerRef!} class="cytoscape-canvas" />
+			<div class="relative flex-1 min-h-0">
+				<div ref={containerRef!} class="cytoscape-canvas absolute inset-0" />
+				<Show when={props.elements().length === 0}>
+					<div class="pointer-events-none absolute inset-0 grid place-items-center text-sm text-base-content/45">
+						{props.emptyMessage ?? "Run a graph query to begin."}
+					</div>
+				</Show>
+			</div>
 		</div>
 	);
 }

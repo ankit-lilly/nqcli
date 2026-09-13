@@ -59,7 +59,7 @@ desktop-test: desktop-deps
 
 # Generation is pinned to the same version as go.mod. Bundled runtime stays external in Vite.
 desktop-bindings:
-	@CGO_ENABLED=0 go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17 generate bindings -f '-tags=server' -ts -i -b -names -d desktop/frontend/bindings ./desktop
+	@CGO_ENABLED=0 go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.20 generate bindings -f '-tags=server' -ts -i -b -names -d desktop/frontend/bindings ./desktop
 
 # ---- Embedded web UI ----
 

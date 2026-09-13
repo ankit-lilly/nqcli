@@ -7,7 +7,6 @@ export {
 };
 
 export type {
-    DataResponse,
     ExpandVertexRequest,
     GraphElement,
     GraphResponse,
@@ -16,9 +15,7 @@ export type {
     ProfileResponse,
     QueryRequest,
     QueryResponse,
-    SoASelection,
-    StudySearch,
-    StudySelection,
+    SchemaRequest,
     VertexPropsRequest,
     VertexPropsResponse
 } from "./models.js";

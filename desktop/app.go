@@ -26,12 +26,15 @@ func runApp(svc core.QueryService, profile string, factory desktop.ServiceFactor
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:          "dGrapher",
-		Width:          1440,
-		Height:         900,
-		URL:            "/",
-		Frameless:      true,
-		BackgroundType: application.BackgroundTypeTranslucent,
+		Title:           "dGrapher",
+		Width:           1440,
+		Height:          900,
+		MinWidth:        900,
+		MinHeight:       600,
+		InitialPosition: application.WindowCentered,
+		URL:             "/",
+		Frameless:       true,
+		BackgroundType:  application.BackgroundTypeTranslucent,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 			TitleBar: application.MacTitleBar{
