@@ -32,6 +32,10 @@ export function ExpandVertex(req: $models.ExpandVertexRequest): $CancellableProm
     return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.ExpandVertex", req);
 }
 
+export function GetNeighborSummary(req: $models.NeighborSummaryRequest): $CancellablePromise<$models.NeighborSummaryResponse> {
+    return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetNeighborSummary", req);
+}
+
 export function GetProfile(): $CancellablePromise<$models.ProfileInfo> {
     return $Call.ByName("github.com/ankit-lilly/nqcli/internal/desktop.DesktopService.GetProfile");
 }

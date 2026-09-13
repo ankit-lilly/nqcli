@@ -2,6 +2,7 @@ import { DesktopService } from "../../bindings/github.com/ankit-lilly/nqcli/inte
 import type {
 	ExpandVertexCommand,
 	GraphQueryPort,
+	NeighborSummaryCommand,
 	RunGraphQuery,
 } from "../application/graph-explorer";
 import { toGraphElements } from "../domain/graph";
@@ -34,6 +35,19 @@ export class WailsGraphQueryAdapter implements GraphQueryPort {
 		return {
 			elements: toGraphElements(response.elements),
 			warning: response.warning,
+		};
+	}
+
+	async neighborSummary(command: NeighborSummaryCommand) {
+		const response = await DesktopService.GetNeighborSummary({
+			id: command.id,
+			type: command.type,
+			direction: command.direction ?? "both",
+		});
+		if (response.error) throw new Error(response.error);
+		return {
+			nodes: response.nodes ?? [],
+			relationships: response.relationships ?? [],
 		};
 	}
 

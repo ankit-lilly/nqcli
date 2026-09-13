@@ -6,6 +6,7 @@ import {
 	createEffect,
 	createMemo,
 	createResource,
+	createSelector,
 	createSignal,
 	onCleanup,
 } from "solid-js";
@@ -161,6 +162,11 @@ function SchemaSidebar(props: {
 	const selected = createMemo(() =>
 		schemaSelection(props.snapshot(), props.selection()),
 	);
+	const selectedKey = () => {
+		const selection = props.selection();
+		return selection ? `${selection.group}:${selection.data.id}` : "";
+	};
+	const isSelected = createSelector(selectedKey);
 	const vertices = createMemo(() => {
 		const query = filter().trim().toLowerCase();
 		return props
@@ -204,29 +210,32 @@ function SchemaSidebar(props: {
 						<span>{vertices().length}</span>
 					</div>
 					<For each={vertices()}>
-						{(vertex) => (
-							<button
-								class={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-base-200 ${props.selection()?.group === "nodes" && props.selection()?.data.id === vertex.type ? "bg-primary/10 text-primary" : ""}`}
-								onClick={() =>
-									props.setSelection({
-										group: "nodes",
-										data: { id: vertex.type, label: vertex.type },
-									})
-								}
-							>
-								<span
-									class="size-2.5 shrink-0 rounded-full"
-									style={{
-										"background-color":
-											NODE_LABEL_COLORS[vertex.type] ?? DEFAULT_NODE_COLOR,
-									}}
-								/>
-								<span class="min-w-0 flex-1 truncate">{vertex.type}</span>
-								<span class="text-[10px] text-base-content/40">
-									{formatCount(vertex.total)}
-								</span>
-							</button>
-						)}
+						{(vertex) => {
+							const key = `nodes:${vertex.type}`;
+							return (
+								<button
+									class={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-base-200 ${isSelected(key) ? "bg-primary/10 text-primary" : ""}`}
+									onClick={() =>
+										props.setSelection({
+											group: "nodes",
+											data: { id: vertex.type, label: vertex.type },
+										})
+									}
+								>
+									<span
+										class="size-2.5 shrink-0 rounded-full"
+										style={{
+											"background-color":
+												NODE_LABEL_COLORS[vertex.type] ?? DEFAULT_NODE_COLOR,
+										}}
+									/>
+									<span class="min-w-0 flex-1 truncate">{vertex.type}</span>
+									<span class="text-[10px] text-base-content/40">
+										{formatCount(vertex.total)}
+									</span>
+								</button>
+							);
+						}}
 					</For>
 				</section>
 				<section class="py-2">
@@ -235,29 +244,34 @@ function SchemaSidebar(props: {
 						<span>{connections().length}</span>
 					</div>
 					<For each={connections()}>
-						{(connection) => (
-							<button
-								class={`w-full px-3 py-1.5 text-left hover:bg-base-200 ${props.selection()?.group === "edges" && props.selection()?.data.id === schemaConnectionID(connection) ? "bg-primary/10 text-primary" : ""}`}
-								onClick={() =>
-									props.setSelection({
-										group: "edges",
-										data: {
-											id: schemaConnectionID(connection),
-											label: connection.edgeType,
-											source: connection.sourceVertexType,
-											target: connection.targetVertexType,
-										},
-									})
-								}
-							>
-								<div class="truncate text-xs font-medium">
-									{connection.edgeType}
-								</div>
-								<div class="truncate text-[10px] text-base-content/45">
-									{connection.sourceVertexType} → {connection.targetVertexType}
-								</div>
-							</button>
-						)}
+						{(connection) => {
+							const id = schemaConnectionID(connection);
+							const key = `edges:${id}`;
+							return (
+								<button
+									class={`w-full px-3 py-1.5 text-left hover:bg-base-200 ${isSelected(key) ? "bg-primary/10 text-primary" : ""}`}
+									onClick={() =>
+										props.setSelection({
+											group: "edges",
+											data: {
+												id,
+												label: connection.edgeType,
+												source: connection.sourceVertexType,
+												target: connection.targetVertexType,
+											},
+										})
+									}
+								>
+									<div class="truncate text-xs font-medium">
+										{connection.edgeType}
+									</div>
+									<div class="truncate text-[10px] text-base-content/45">
+										{connection.sourceVertexType} →{" "}
+										{connection.targetVertexType}
+									</div>
+								</button>
+							);
+						}}
 					</For>
 				</section>
 			</div>

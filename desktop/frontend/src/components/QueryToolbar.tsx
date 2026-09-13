@@ -5,7 +5,7 @@ interface Props {
 	queryType: Accessor<"gremlin" | "cypher">;
 	setQueryType: Setter<"gremlin" | "cypher">;
 	viewMode: Accessor<"json" | "graph">;
-	setViewMode: Setter<"json" | "graph">;
+	onViewModeChange: (mode: "json" | "graph") => void;
 	query: Accessor<string>;
 	setQuery: Setter<string>;
 	loading: Accessor<boolean>;
@@ -32,14 +32,14 @@ export default function QueryToolbar(props: Props) {
 			<div class="join">
 				<button
 					disabled={props.loading()}
-					onClick={() => props.setViewMode("graph")}
+					onClick={() => props.onViewModeChange("graph")}
 					class={`join-item btn btn-xs ${props.viewMode() === "graph" ? "btn-primary" : "btn-ghost"}`}
 				>
 					Graph
 				</button>
 				<button
 					disabled={props.loading()}
-					onClick={() => props.setViewMode("json")}
+					onClick={() => props.onViewModeChange("json")}
 					class={`join-item btn btn-xs ${props.viewMode() === "json" ? "btn-primary" : "btn-ghost"}`}
 				>
 					JSON

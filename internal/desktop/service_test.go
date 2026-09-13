@@ -191,11 +191,70 @@ func TestExpandVertex_ExecutesOpenCypher(t *testing.T) {
 	for _, want := range []string{
 		"MATCH (source)<-[edge:`has``version`]-(neighbor:`StudyVersion`)",
 		`ID(source) = "vertex\"1"`,
+		"WITH DISTINCT source, neighbor",
 		"LIMIT 100",
 	} {
 		if !strings.Contains(spy.lastQuery, want) {
 			t.Errorf("query %q does not contain %q", spy.lastQuery, want)
 		}
+	}
+	if got := strings.Count(spy.lastQuery, "MATCH (source)<-[edge:`has``version`]-(neighbor:`StudyVersion`)"); got != 2 {
+		t.Fatalf("expected expansion route to be preserved in both matches, got %d in %q", got, spy.lastQuery)
+	}
+}
+
+func TestGetNeighborSummary_Gremlin(t *testing.T) {
+	t.Parallel()
+	spy := &spyService{result: core.QueryResult{Content: `[{
+		"nodes":{"StudyVersion":12,"Organization":2},
+		"relationships":{"has_version":12,"has_latest_version":1}
+	}]`}}
+	svc := newTestService(spy)
+
+	response := svc.GetNeighborSummary(NeighborSummaryRequest{
+		ID: "study-1", Type: "gremlin", Direction: "out",
+	})
+
+	if response.Error != "" {
+		t.Fatalf("unexpected error: %s", response.Error)
+	}
+	if len(response.Nodes) != 2 || response.Nodes[1] != (NeighborOption{Label: "StudyVersion", Count: 12}) {
+		t.Fatalf("unexpected node options: %#v", response.Nodes)
+	}
+	if len(response.Relationships) != 2 || response.Relationships[0] != (NeighborOption{Label: "has_latest_version", Count: 1}) {
+		t.Fatalf("unexpected relationship options: %#v", response.Relationships)
+	}
+	for _, expected := range []string{"g.V('study-1')", ".by(out()", ".by(outE()"} {
+		if !strings.Contains(spy.lastQuery, expected) {
+			t.Errorf("query %q does not contain %q", spy.lastQuery, expected)
+		}
+	}
+}
+
+func TestGetNeighborSummary_OpenCypher(t *testing.T) {
+	t.Parallel()
+	spy := &spyService{result: core.QueryResult{Content: `{"results":[
+		{"kind":"node","label":"StudyVersion","count":12},
+		{"kind":"relationship","label":"has_version","count":12},
+		{"kind":"relationship","label":"has_latest_version","count":1}
+	]}`}}
+	svc := newTestService(spy)
+
+	response := svc.GetNeighborSummary(NeighborSummaryRequest{
+		ID: "study-1", Type: "cypher", Direction: "out",
+	})
+
+	if response.Error != "" {
+		t.Fatalf("unexpected error: %s", response.Error)
+	}
+	if len(response.Nodes) != 1 || response.Nodes[0].Count != 12 {
+		t.Fatalf("unexpected node options: %#v", response.Nodes)
+	}
+	if len(response.Relationships) != 2 {
+		t.Fatalf("unexpected relationship options: %#v", response.Relationships)
+	}
+	if !strings.Contains(spy.lastQuery, "MATCH (source)-[edge]->(neighbor)") || !strings.Contains(spy.lastQuery, "UNION ALL") {
+		t.Fatalf("unexpected query: %s", spy.lastQuery)
 	}
 }
 

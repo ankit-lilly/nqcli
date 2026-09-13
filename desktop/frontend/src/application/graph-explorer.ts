@@ -18,6 +18,22 @@ export type ExpandVertexCommand = {
 	excludedVertexIds?: string[];
 };
 
+export type NeighborSummaryCommand = {
+	id: string;
+	type: QueryType;
+	direction?: ExpansionDirection;
+};
+
+export type NeighborOption = {
+	label: string;
+	count: number;
+};
+
+export type NeighborSummary = {
+	nodes: NeighborOption[];
+	relationships: NeighborOption[];
+};
+
 export type GraphResult = {
 	elements: GraphElement[];
 	warning?: string;
@@ -26,6 +42,7 @@ export type GraphResult = {
 export interface GraphQueryPort {
 	run(command: RunGraphQuery): Promise<GraphResult>;
 	expand(command: ExpandVertexCommand): Promise<GraphResult>;
+	neighborSummary(command: NeighborSummaryCommand): Promise<NeighborSummary>;
 	vertexProperties(id: string): Promise<Record<string, unknown> | null>;
 }
 
@@ -39,6 +56,10 @@ export class GraphExplorer {
 
 	expand(command: ExpandVertexCommand) {
 		return this.queries.expand(command);
+	}
+
+	neighborSummary(command: NeighborSummaryCommand) {
+		return this.queries.neighborSummary(command);
 	}
 
 	vertexProperties(id: string) {

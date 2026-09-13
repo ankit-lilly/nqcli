@@ -1,9 +1,15 @@
-import { lazy, Show, Suspense, createEffect, createSignal } from "solid-js";
+import {
+	batch,
+	lazy,
+	Show,
+	Suspense,
+	createEffect,
+	createSignal,
+} from "solid-js";
 import { DesktopService } from "../bindings/github.com/ankit-lilly/nqcli/internal/desktop";
 import type { ExpandVertexCommand } from "./application/graph-explorer";
 import { graphExplorer } from "./bootstrap/graph";
 import {
-	graphLabels,
 	mergeGraphElements,
 	removeGraphElement,
 	visibleVertexIDs,
@@ -45,20 +51,28 @@ export default function App() {
 	const [queryTime, setQueryTime] = createSignal(0);
 	const [currentEnv, setCurrentEnv] = createSignal("dev");
 	const [currentProfile, setCurrentProfile] = createSignal("");
+	const [hasExecuted, setHasExecuted] = createSignal(false);
 	let generation = 0;
 	let expansionGeneration = 0;
 
 	createEffect(() => applyTheme(theme()));
 
 	function clearResults() {
-		setJsonResult("");
-		setGraphElements([]);
-		setSelectedElement(null);
-		setError("");
-		setWarning("");
-		setQueryTime(0);
-		setExpanding(false);
-		++expansionGeneration;
+		batch(() => {
+			setJsonResult("");
+			setGraphElements([]);
+			setSelectedElement(null);
+			setError("");
+			setWarning("");
+			setQueryTime(0);
+			setExpanding(false);
+			++expansionGeneration;
+		});
+	}
+
+	function resetResults() {
+		clearResults();
+		setHasExecuted(false);
 	}
 
 	async function cancel() {
@@ -78,10 +92,9 @@ export default function App() {
 		setWorkspace(next);
 	}
 
-	async function execute() {
+	async function executeMode(mode: "json" | "graph") {
 		if (loading() || switching() || !query().trim()) return;
 		const token = ++generation;
-		const mode = viewMode();
 		setLoading(true);
 		clearResults();
 		const start = performance.now();
@@ -111,8 +124,20 @@ export default function App() {
 			if (token === generation) {
 				setQueryTime(performance.now() - start);
 				setLoading(false);
+				setHasExecuted(true);
 			}
 		}
+	}
+
+	function execute() {
+		return executeMode(viewMode());
+	}
+
+	function changeViewMode(mode: "json" | "graph") {
+		if (mode === viewMode()) return;
+		const rerun = hasExecuted();
+		setViewMode(mode);
+		if (rerun) void executeMode(mode);
 	}
 
 	async function expand(
@@ -154,7 +179,6 @@ export default function App() {
 		setSelectedElement(null);
 	}
 
-	const labels = () => graphLabels(graphElements());
 	const queryResults = () => (
 		<div class="flex h-full min-h-0 flex-col">
 			<Show when={warning()}>
@@ -220,8 +244,7 @@ export default function App() {
 										void expand(selected.data.id, options);
 								}}
 								expanding={expanding}
-								nodeLabels={() => labels().nodeLabels}
-								relationshipLabels={() => labels().relationshipLabels}
+								queryType={queryType}
 							/>
 						}
 					/>
@@ -250,7 +273,7 @@ export default function App() {
 					onSwitchStart={async () => {
 						setSwitching(true);
 						await cancel();
-						clearResults();
+						resetResults();
 					}}
 					onSwitchEnd={() => setSwitching(false)}
 					onProfileChange={(profile, env) => {
@@ -309,7 +332,7 @@ export default function App() {
 											setQuery(sample.query);
 											setQueryType("gremlin");
 											setViewMode(sample.view);
-											clearResults();
+											resetResults();
 										}}
 										disabled={loading()}
 									/>
@@ -318,7 +341,7 @@ export default function App() {
 										queryType={queryType}
 										setQueryType={setQueryType}
 										viewMode={viewMode}
-										setViewMode={setViewMode}
+										onViewModeChange={changeViewMode}
 										query={query}
 										setQuery={setQuery}
 										loading={loading}

@@ -22,6 +22,23 @@ export interface GraphResponse {
     "error"?: string;
 }
 
+export interface NeighborOption {
+    "label": string;
+    "count": number;
+}
+
+export interface NeighborSummaryRequest {
+    "id": string;
+    "type": string;
+    "direction": string;
+}
+
+export interface NeighborSummaryResponse {
+    "nodes": NeighborOption[] | null;
+    "relationships": NeighborOption[] | null;
+    "error"?: string;
+}
+
 export interface ProfileInfo {
     "profile": string;
     "env": string;

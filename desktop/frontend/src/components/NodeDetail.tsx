@@ -4,12 +4,16 @@ import {
 	Show,
 	createEffect,
 	createMemo,
+	createResource,
 	createSignal,
+	on,
 	onCleanup,
 } from "solid-js";
 import type {
 	ExpandVertexCommand,
 	ExpansionDirection,
+	NeighborOption,
+	QueryType,
 } from "../application/graph-explorer";
 import { graphExplorer } from "../bootstrap/graph";
 import type { GraphSelection } from "../domain/graph";
@@ -20,8 +24,7 @@ interface Props {
 	onRemove: () => void;
 	onExpand: (options: Omit<ExpandVertexCommand, "id" | "type">) => void;
 	expanding: Accessor<boolean>;
-	nodeLabels: Accessor<string[]>;
-	relationshipLabels: Accessor<string[]>;
+	queryType: Accessor<QueryType>;
 }
 
 export default function NodeDetail(props: Props) {
@@ -35,43 +38,59 @@ export default function NodeDetail(props: Props) {
 	const [neighborLabel, setNeighborLabel] = createSignal("");
 	const [limit, setLimit] = createSignal(10);
 	const cache = new Map<string, Record<string, unknown>>();
+	const [neighborSummary] = createResource(
+		() => {
+			const selected = props.element();
+			if (!selected || selected.group !== "nodes") return null;
+			return {
+				id: selected.data.id,
+				type: props.queryType(),
+				direction: direction(),
+			};
+		},
+		(command) => graphExplorer.neighborSummary(command),
+	);
 
-	createEffect(() => {
-		let active = true;
-		onCleanup(() => {
-			active = false;
-		});
-		setLoading(false);
-		setError("");
-		const selected = props.element();
-		setFullData(selected?.data ?? null);
-		if (!selected || selected.group !== "nodes") return;
-
-		const cached = cache.get(selected.data.id);
-		if (cached) {
-			setFullData({ ...selected.data, ...cached });
-			return;
-		}
-
-		setLoading(true);
-		graphExplorer
-			.vertexProperties(selected.data.id)
-			.then((result) => {
-				if (!active) return;
-				setLoading(false);
-				if (!result) return;
-				if (JSON.stringify(result).length <= 32_000) {
-					if (cache.size >= 20) cache.delete(cache.keys().next().value!);
-					cache.set(selected.data.id, result);
-				}
-				setFullData({ ...selected.data, ...result });
-			})
-			.catch((cause) => {
-				if (!active) return;
-				setLoading(false);
-				setError(cause instanceof Error ? cause.message : String(cause));
+	createEffect(
+		on(props.element, (selected) => {
+			let active = true;
+			onCleanup(() => {
+				active = false;
 			});
-	});
+			setLoading(false);
+			setError("");
+			setRelationship("");
+			setNeighborLabel("");
+			setLimit(10);
+			setFullData(selected?.data ?? null);
+			if (!selected || selected.group !== "nodes") return;
+
+			const cached = cache.get(selected.data.id);
+			if (cached) {
+				setFullData({ ...selected.data, ...cached });
+				return;
+			}
+
+			setLoading(true);
+			graphExplorer
+				.vertexProperties(selected.data.id)
+				.then((result) => {
+					if (!active) return;
+					setLoading(false);
+					if (!result) return;
+					if (JSON.stringify(result).length <= 32_000) {
+						if (cache.size >= 20) cache.delete(cache.keys().next().value!);
+						cache.set(selected.data.id, result);
+					}
+					setFullData({ ...selected.data, ...result });
+				})
+				.catch((cause) => {
+					if (!active) return;
+					setLoading(false);
+					setError(cause instanceof Error ? cause.message : String(cause));
+				});
+		}),
+	);
 
 	const entries = createMemo(() => {
 		const data = fullData();
@@ -88,6 +107,39 @@ export default function NodeDetail(props: Props) {
 
 	const title = () => String(props.element()?.data.label ?? "Graph element");
 	const isNode = () => props.element()?.group === "nodes";
+	const totalNeighbors = () =>
+		neighborSummary()?.nodes.reduce(
+			(total, option) => total + option.count,
+			0,
+		) ?? 0;
+	const availableForSelection = createMemo(() => {
+		const summary = neighborSummary();
+		if (!summary) return 0;
+		const counts: number[] = [];
+		if (relationship()) {
+			counts.push(
+				summary.relationships.find((option) => option.label === relationship())
+					?.count ?? 0,
+			);
+		}
+		if (neighborLabel()) {
+			counts.push(
+				summary.nodes.find((option) => option.label === neighborLabel())
+					?.count ?? 0,
+			);
+		}
+		return counts.length > 0 ? Math.min(...counts) : totalNeighbors();
+	});
+
+	function selectRoute(
+		value: string,
+		options: NeighborOption[],
+		setter: (value: string) => void,
+	) {
+		setter(value);
+		const count = options.find((option) => option.label === value)?.count;
+		if (count) setLimit(Math.min(100, count));
+	}
 
 	return (
 		<div class="p-4 text-xs">
@@ -136,9 +188,25 @@ export default function NodeDetail(props: Props) {
 
 			<Show when={isNode()}>
 				<section class="pb-4 mb-4 border-b border-base-300">
-					<div class="text-[10px] font-semibold uppercase text-base-content/40 mb-2">
-						Expand relationships
+					<div class="mb-2 flex items-center justify-between gap-2">
+						<div class="text-[10px] font-semibold uppercase text-base-content/40">
+							Expand relationships
+						</div>
+						<Show when={neighborSummary.loading}>
+							<span class="loading loading-spinner loading-xs" />
+						</Show>
 					</div>
+					<Show when={neighborSummary.error}>
+						<p class="mb-2 text-[10px] text-error">
+							Could not inspect available relationships.
+						</p>
+					</Show>
+					<Show when={!neighborSummary.loading && neighborSummary()}>
+						<div class="mb-2 text-[10px] text-base-content/50">
+							{totalNeighbors().toLocaleString()} connected nodes in this
+							direction
+						</div>
+					</Show>
 					<div class="grid grid-cols-2 gap-2">
 						<label class="form-control">
 							<span class="label-text text-[10px] mb-1">Direction</span>
@@ -170,34 +238,58 @@ export default function NodeDetail(props: Props) {
 					</div>
 					<label class="form-control mt-2">
 						<span class="label-text text-[10px] mb-1">Relationship type</span>
-						<input
-							class="input input-bordered input-xs w-full"
-							list="relationship-labels"
-							placeholder="Any relationship"
+						<select
+							class="select select-bordered select-xs w-full"
 							value={relationship()}
-							onInput={(event) => setRelationship(event.currentTarget.value)}
-						/>
-						<datalist id="relationship-labels">
-							<For each={props.relationshipLabels()}>
-								{(label) => <option value={label} />}
+							disabled={neighborSummary.loading}
+							onChange={(event) =>
+								selectRoute(
+									event.currentTarget.value,
+									neighborSummary()?.relationships ?? [],
+									setRelationship,
+								)
+							}
+						>
+							<option value="">Any relationship</option>
+							<For each={neighborSummary()?.relationships ?? []}>
+								{(option) => (
+									<option value={option.label}>
+										{option.label} ({option.count.toLocaleString()})
+									</option>
+								)}
 							</For>
-						</datalist>
+						</select>
 					</label>
 					<label class="form-control mt-2">
 						<span class="label-text text-[10px] mb-1">Connected node type</span>
-						<input
-							class="input input-bordered input-xs w-full"
-							list="node-labels"
-							placeholder="Any node type"
+						<select
+							class="select select-bordered select-xs w-full"
 							value={neighborLabel()}
-							onInput={(event) => setNeighborLabel(event.currentTarget.value)}
-						/>
-						<datalist id="node-labels">
-							<For each={props.nodeLabels()}>
-								{(label) => <option value={label} />}
+							disabled={neighborSummary.loading}
+							onChange={(event) =>
+								selectRoute(
+									event.currentTarget.value,
+									neighborSummary()?.nodes ?? [],
+									setNeighborLabel,
+								)
+							}
+						>
+							<option value="">Any node type</option>
+							<For each={neighborSummary()?.nodes ?? []}>
+								{(option) => (
+									<option value={option.label}>
+										{option.label} ({option.count.toLocaleString()})
+									</option>
+								)}
 							</For>
-						</datalist>
+						</select>
 					</label>
+					<Show when={availableForSelection() > 0}>
+						<div class="mt-2 text-[10px] text-base-content/50">
+							Up to {availableForSelection().toLocaleString()} connected nodes
+							match
+						</div>
+					</Show>
 					<button
 						class="btn btn-primary btn-sm w-full mt-3"
 						disabled={props.expanding()}

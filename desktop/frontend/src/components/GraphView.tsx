@@ -194,7 +194,7 @@ export default function GraphView(props: Props) {
 		},
 		{
 			selector: `node.${NODE_LABEL_CLASS}`,
-			style: { label: "data(displayName)" },
+			style: { label: "data(label)" },
 		},
 		{
 			selector: "edge",
@@ -411,15 +411,7 @@ export default function GraphView(props: Props) {
 			for (const group of ["nodes", "edges"] as const) {
 				for (const element of elements) {
 					if (element.group !== group) continue;
-					const data = {
-						...element.data,
-						displayName: String(
-							element.data.name ||
-								element.data.decode ||
-								element.data.label ||
-								"",
-						).slice(0, 60),
-					};
+					const data = element.data;
 					const existing = cy!.getElementById(element.data.id);
 					if (existing.length) existing.data(data);
 					else cy!.add({ group: element.group, data } as any);

@@ -68,21 +68,6 @@ export function visibleVertexIDs(elements: GraphElement[]): string[] {
 		.map((element) => element.data.id);
 }
 
-export function graphLabels(elements: GraphElement[]) {
-	const nodeLabels = new Set<string>();
-	const relationshipLabels = new Set<string>();
-	for (const element of elements) {
-		const label = element.data.label;
-		if (typeof label !== "string" || label === "") continue;
-		if (element.group === "nodes") nodeLabels.add(label);
-		else relationshipLabels.add(label);
-	}
-	return {
-		nodeLabels: [...nodeLabels].sort(),
-		relationshipLabels: [...relationshipLabels].sort(),
-	};
-}
-
 /** Stable identity for the rendered topology, independent of result ordering. */
 export function graphTopologyKey(elements: GraphElement[]): string {
 	return elements
