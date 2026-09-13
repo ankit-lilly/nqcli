@@ -51,7 +51,6 @@ export default function App() {
 	const [queryTime, setQueryTime] = createSignal(0);
 	const [currentEnv, setCurrentEnv] = createSignal("dev");
 	const [currentProfile, setCurrentProfile] = createSignal("");
-	const [hasExecuted, setHasExecuted] = createSignal(false);
 	let generation = 0;
 	let expansionGeneration = 0;
 
@@ -68,11 +67,6 @@ export default function App() {
 			setExpanding(false);
 			++expansionGeneration;
 		});
-	}
-
-	function resetResults() {
-		clearResults();
-		setHasExecuted(false);
 	}
 
 	async function cancel() {
@@ -92,31 +86,23 @@ export default function App() {
 		setWorkspace(next);
 	}
 
-	async function executeMode(mode: "json" | "graph") {
+	async function execute() {
 		if (loading() || switching() || !query().trim()) return;
 		const token = ++generation;
 		setLoading(true);
 		clearResults();
 		const start = performance.now();
 		try {
-			if (mode === "graph") {
-				const response = await graphExplorer.run({
-					query: query(),
-					type: queryType(),
-				});
-				if (token !== generation) return;
+			const response = await graphExplorer.run({
+				query: query(),
+				type: queryType(),
+			});
+			if (token !== generation) return;
+			batch(() => {
 				setGraphElements(response.elements);
+				setJsonResult(response.json);
 				setWarning(response.warning ?? "");
-			} else {
-				const response = await DesktopService.ExecuteQuery({
-					query: query(),
-					type: queryType(),
-					serializer: "",
-				});
-				if (token !== generation) return;
-				if (response.error) throw new Error(response.error);
-				setJsonResult(response.processed || "");
-			}
+			});
 		} catch (cause) {
 			if (token === generation)
 				setError(cause instanceof Error ? cause.message : String(cause));
@@ -124,20 +110,8 @@ export default function App() {
 			if (token === generation) {
 				setQueryTime(performance.now() - start);
 				setLoading(false);
-				setHasExecuted(true);
 			}
 		}
-	}
-
-	function execute() {
-		return executeMode(viewMode());
-	}
-
-	function changeViewMode(mode: "json" | "graph") {
-		if (mode === viewMode()) return;
-		const rerun = hasExecuted();
-		setViewMode(mode);
-		if (rerun) void executeMode(mode);
 	}
 
 	async function expand(
@@ -181,7 +155,7 @@ export default function App() {
 
 	const queryResults = () => (
 		<div class="flex h-full min-h-0 flex-col">
-			<Show when={warning()}>
+			<Show when={warning() && viewMode() === "graph"}>
 				<p
 					role="status"
 					class="border-b border-base-300 px-5 py-2 text-xs text-warning"
@@ -273,7 +247,7 @@ export default function App() {
 					onSwitchStart={async () => {
 						setSwitching(true);
 						await cancel();
-						resetResults();
+						clearResults();
 					}}
 					onSwitchEnd={() => setSwitching(false)}
 					onProfileChange={(profile, env) => {
@@ -332,7 +306,7 @@ export default function App() {
 											setQuery(sample.query);
 											setQueryType("gremlin");
 											setViewMode(sample.view);
-											resetResults();
+											clearResults();
 										}}
 										disabled={loading()}
 									/>
@@ -341,7 +315,7 @@ export default function App() {
 										queryType={queryType}
 										setQueryType={setQueryType}
 										viewMode={viewMode}
-										onViewModeChange={changeViewMode}
+										onViewModeChange={(mode) => setViewMode(mode)}
 										query={query}
 										setQuery={setQuery}
 										loading={loading}

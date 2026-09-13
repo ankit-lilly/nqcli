@@ -19,6 +19,7 @@ export interface GraphElement {
 export interface GraphResponse {
     "warning"?: string;
     "elements": GraphElement[] | null;
+    "json"?: string;
     "error"?: string;
 }
 

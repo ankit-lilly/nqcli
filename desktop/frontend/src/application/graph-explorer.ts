@@ -36,6 +36,7 @@ export type NeighborSummary = {
 
 export type GraphResult = {
 	elements: GraphElement[];
+	json: string;
 	warning?: string;
 };
 

@@ -115,9 +115,3 @@ pre code {
 ::-webkit-scrollbar-thumb:hover {
 	background: color-mix(in oklch, var(--color-base-content) 30%, transparent);
 }
-
-/* Loading overlay */
-.loading-overlay {
-	backdrop-filter: blur(4px);
-	-webkit-backdrop-filter: blur(4px);
-}

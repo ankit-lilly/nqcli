@@ -96,10 +96,11 @@ func TestExecuteGraphQuery_UsesDefaultSerializer(t *testing.T) {
 	}
 }
 
-func TestExecuteGraphQuery_ParsesElements(t *testing.T) {
+func TestExecuteGraphQuery_ReturnsGraphAndJSONFromOneQuery(t *testing.T) {
 	t.Parallel()
 	graphson := `[{"@type":"g:Vertex","@value":{"id":"v1","label":"Study"}}]`
-	spy := &spyService{result: core.QueryResult{Content: graphson, Raw: graphson}}
+	pretty := "[\n  {\n    \"label\": \"Study\"\n  }\n]"
+	spy := &spyService{result: core.QueryResult{Content: graphson, Processed: pretty, Raw: graphson}}
 	svc := newTestService(spy)
 
 	resp := svc.ExecuteGraphQuery(QueryRequest{Query: "g.V()"})
@@ -112,6 +113,12 @@ func TestExecuteGraphQuery_ParsesElements(t *testing.T) {
 	}
 	if resp.Elements[0].Data["label"] != "Study" {
 		t.Fatalf("expected label 'Study', got %v", resp.Elements[0].Data["label"])
+	}
+	if resp.JSON != pretty {
+		t.Fatalf("expected formatted JSON %q, got %q", pretty, resp.JSON)
+	}
+	if spy.lastOpts.SkipFormatting {
+		t.Fatal("graph query must format the same response for the JSON view")
 	}
 }
 

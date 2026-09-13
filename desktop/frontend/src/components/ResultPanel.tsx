@@ -40,21 +40,11 @@ export default function ResultPanel(props: Props) {
 							setSelectedElement={props.setSelectedElement}
 							onExpand={props.onExpand}
 							onClear={props.onClear}
+							loading={props.loading}
 						/>
 					</Suspense>
 				</Show>
 			</div>
-
-			<Show when={props.loading()}>
-				<div class="loading-overlay absolute inset-0 flex items-center justify-center bg-base-100/60">
-					<div class="flex items-center gap-2.5 px-4 py-2.5 rounded-box border border-base-300 bg-base-100 shadow-lg">
-						<span class="loading loading-spinner loading-sm" />
-						<span class="text-xs text-base-content/60">
-							Working with Neptune...
-						</span>
-					</div>
-				</div>
-			</Show>
 		</div>
 	);
 }

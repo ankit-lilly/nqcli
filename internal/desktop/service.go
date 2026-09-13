@@ -27,6 +27,7 @@ type QueryResponse struct {
 type GraphResponse struct {
 	Warning  string         `json:"warning,omitempty"`
 	Elements []GraphElement `json:"elements"`
+	JSON     string         `json:"json,omitempty"`
 	Error    string         `json:"error,omitempty"`
 }
 
@@ -157,7 +158,7 @@ func (d *DesktopService) ExecuteGraphQuery(req QueryRequest) GraphResponse {
 	if req.Type == "" {
 		req.Type = "gremlin"
 	}
-	opts := core.QueryOpts{SkipFormatting: true, MaxResponseBytes: 8 << 20}
+	opts := core.QueryOpts{MaxResponseBytes: 8 << 20}
 	result, err := svc.ExecuteQuery(ctx, req.Query, req.Type, opts)
 	if err != nil {
 		return GraphResponse{Error: err.Error()}
@@ -172,7 +173,11 @@ func (d *DesktopService) ExecuteGraphQuery(req QueryRequest) GraphResponse {
 		return GraphResponse{Error: fmt.Sprintf("graph parse error: %v", parseErr)}
 	}
 	elements, warning := boundGraph(elements)
-	return GraphResponse{Elements: elements, Warning: warning}
+	jsonResult := result.Processed
+	if jsonResult == "" {
+		jsonResult = content
+	}
+	return GraphResponse{Elements: elements, JSON: jsonResult, Warning: warning}
 }
 
 // GetSchema returns cached schema data immediately and revalidates it in the

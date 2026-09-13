@@ -79,6 +79,7 @@ interface Props {
 	onClear?: () => void;
 	emptyMessage?: string;
 	focusSelection?: boolean;
+	loading?: Accessor<boolean>;
 }
 
 function resolveHex(varName: string, fallback: string): string {
@@ -490,6 +491,15 @@ export default function GraphView(props: Props) {
 			class={`graph-container bg-base-100 ${fullscreen() ? "fixed inset-0 z-50" : ""}`}
 		>
 			<div class="flex items-center gap-1 px-3 py-2 border-b border-base-300 min-h-11">
+				<Show when={props.loading?.()}>
+					<div
+						role="status"
+						class="mr-1 flex shrink-0 items-center gap-1.5 text-[10px] text-base-content/55"
+					>
+						<span class="loading loading-spinner loading-xs" />
+						<span>Updating graph</span>
+					</div>
+				</Show>
 				<select
 					class="select select-bordered select-xs w-32"
 					value={activeLayout()}
@@ -648,7 +658,7 @@ export default function GraphView(props: Props) {
 					ref={containerRef!}
 					class="cytoscape-canvas absolute inset-0 size-full min-h-px min-w-px"
 				/>
-				<Show when={props.elements().length === 0}>
+				<Show when={props.elements().length === 0 && !props.loading?.()}>
 					<div class="pointer-events-none absolute inset-0 grid place-items-center text-sm text-base-content/45">
 						{props.emptyMessage ?? "Run a graph query to begin."}
 					</div>

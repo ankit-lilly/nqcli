@@ -17,6 +17,7 @@ export class WailsGraphQueryAdapter implements GraphQueryPort {
 		if (response.error) throw new Error(response.error);
 		return {
 			elements: toGraphElements(response.elements),
+			json: response.json ?? "",
 			warning: response.warning,
 		};
 	}
@@ -34,6 +35,7 @@ export class WailsGraphQueryAdapter implements GraphQueryPort {
 		if (response.error) throw new Error(response.error);
 		return {
 			elements: toGraphElements(response.elements),
+			json: "",
 			warning: response.warning,
 		};
 	}
