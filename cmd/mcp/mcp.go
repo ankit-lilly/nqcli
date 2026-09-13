@@ -5,26 +5,24 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ankit-lilly/nqcli/internal/core"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
-
-type QueryService interface {
-	ExecuteQueryCtx(ctx context.Context, query, queryType string) (string, string, error)
-}
 
 type runGremlinArgs struct {
 	Query string `json:"query" jsonschema:"The Gremlin traversal string to execute"`
 }
 
-func NewCommand(factory func(context.Context) (QueryService, error), version string) *cobra.Command {
+func NewCommand(factory func(context.Context) (core.QueryService, error), version string) *cobra.Command {
 	return &cobra.Command{
 		Use:           "mcp",
 		Short:         "Start an MCP server over stdio for running Neptune queries.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appService, err := factory(cmd.Context())
+			service, err := factory(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -46,14 +44,14 @@ func NewCommand(factory func(context.Context) (QueryService, error), version str
 						return nil, nil, fmt.Errorf("query cannot be empty")
 					}
 
-					prettyJSON, _, execErr := appService.ExecuteQueryCtx(ctx, query, "gremlin")
+					result, execErr := service.ExecuteQuery(ctx, query, "gremlin", core.QueryOpts{})
 					if execErr != nil {
 						return nil, nil, execErr
 					}
 
 					return &mcp.CallToolResult{
 						Content: []mcp.Content{
-							&mcp.TextContent{Text: prettyJSON},
+							&mcp.TextContent{Text: result.Processed},
 						},
 					}, nil, nil
 				},
@@ -66,7 +64,7 @@ func NewCommand(factory func(context.Context) (QueryService, error), version str
 					Description: "Returns the embedded graph schema (default). Set NQ_MCP_SCHEMA_SOURCE=dynamic to run live discovery (labels, properties, edge patterns, counts, enums).",
 				},
 				func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-					prettyJSON, execErr := buildGraphSchema(ctx, appService)
+					prettyJSON, execErr := buildGraphSchema(ctx, service)
 					if execErr != nil {
 						return nil, nil, execErr
 					}

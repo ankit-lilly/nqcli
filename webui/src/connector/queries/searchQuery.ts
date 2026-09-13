@@ -1,0 +1,43 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import type { UpdateSchemaHandler } from "@/core/StateProvider/schema";
+
+import type { KeywordSearchRequest } from "../useGEFetchTypes";
+
+import {
+	getConnectionApplication,
+	getStore,
+	setVertexDetailsQueryCache,
+	updateVertexGraphCanvasState,
+} from "./helpers";
+
+/**
+ * Performs a search with the provided parameters.
+ * @param request The search parameters to use for the query.
+ * @param explorer The service client to use for fetching the neighbors count.
+ * @param queryClient The query client to use for updating the cache.
+ * @returns A list of nodes that match the search parameters.
+ */
+export function searchQuery(
+	request: KeywordSearchRequest,
+	updateSchema: UpdateSchemaHandler,
+) {
+	// oxlint-disable-next-line @tanstack/query/exhaustive-deps -- updateSchema is a callback, not query data
+	return queryOptions({
+		queryKey: ["keyword-search", request],
+		queryFn: async ({ signal, meta, client }) => {
+			const application = getConnectionApplication(meta);
+			const store = getStore(meta);
+
+			const results = await application.queries.search(request, { signal });
+
+			results.vertices.forEach((vertex) => {
+				setVertexDetailsQueryCache(client, vertex);
+			});
+			updateVertexGraphCanvasState(store, results.vertices);
+			updateSchema(results);
+
+			return results;
+		},
+	});
+}

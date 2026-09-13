@@ -1,0 +1,131 @@
+// @vitest-environment happy-dom
+import { waitFor } from "@testing-library/react";
+
+import type { NeighborCount } from "@/connector";
+
+import { createVertexType } from "@/core";
+import {
+	createRandomEdge,
+	createRandomVertex,
+	DbState,
+	renderHookWithState,
+} from "@/utils/testing";
+
+import useNeighborsOptions from "./useNeighborsOptions";
+
+describe("useNeighborsOptions", () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("should return an empty list when no response", () => {
+		const dbState = new DbState();
+		const vertex = createRandomVertex();
+
+		const { result } = renderHookWithState(
+			() => useNeighborsOptions(vertex.id),
+			dbState,
+		);
+
+		expect(result.current).toHaveLength(0);
+	});
+
+	it("should return an empty list when response is empty", () => {
+		const dbState = new DbState();
+		const vertex = createRandomVertex();
+
+		const response: NeighborCount = {
+			vertexId: vertex.id,
+			totalCount: 0,
+			counts: new Map(),
+		};
+		vi.mocked(dbState.explorer.neighborCounts).mockResolvedValueOnce({
+			counts: [response],
+		});
+
+		const { result } = renderHookWithState(
+			() => useNeighborsOptions(vertex.id),
+			dbState,
+		);
+
+		expect(result.current).toHaveLength(0);
+	});
+
+	it("should return list of neighbor types", async () => {
+		const dbState = new DbState();
+		const vertex = createRandomVertex();
+		dbState.addVertexToGraph(vertex);
+
+		const response: NeighborCount = {
+			vertexId: vertex.id,
+			totalCount: 8,
+			counts: new Map([
+				[createVertexType("nodeType1"), 5],
+				[createVertexType("nodeType2"), 3],
+			]),
+		};
+		vi.mocked(dbState.explorer.neighborCounts).mockResolvedValueOnce({
+			counts: [response],
+		});
+
+		const { result } = renderHookWithState(
+			() => useNeighborsOptions(vertex.id),
+			dbState,
+		);
+
+		await waitFor(() => {
+			expect(dbState.explorer.neighborCounts).toHaveBeenCalledTimes(1);
+			expect(result.current).toHaveLength(2);
+
+			const firstResult = result.current[0];
+			expect(firstResult.label).toEqual("nodeType1");
+			expect(firstResult.value).toEqual(createVertexType("nodeType1"));
+			expect(firstResult.isDisabled).toEqual(false);
+
+			const secondResult = result.current[1];
+			expect(secondResult.label).toEqual("nodeType2");
+			expect(secondResult.value).toEqual(createVertexType("nodeType2"));
+			expect(secondResult.isDisabled).toEqual(false);
+		});
+	});
+
+	it("should disable neighbor when all neighbors in graph already", async () => {
+		const dbState = new DbState();
+
+		// Add source and neighbor vertex to graph
+		const vertex = createRandomVertex();
+		dbState.addVertexToGraph(vertex);
+
+		const neighbor = createRandomVertex();
+		neighbor.type = createVertexType("nodeType1");
+		neighbor.types = [createVertexType("nodeType1")];
+		dbState.addVertexToGraph(neighbor);
+
+		const edge = createRandomEdge(vertex, neighbor);
+		dbState.addEdgeToGraph(edge);
+
+		const response: NeighborCount = {
+			vertexId: vertex.id,
+			totalCount: 1,
+			counts: new Map([[createVertexType("nodeType1"), 1]]),
+		};
+		vi.mocked(dbState.explorer.neighborCounts).mockResolvedValueOnce({
+			counts: [response],
+		});
+
+		const { result } = renderHookWithState(
+			() => useNeighborsOptions(vertex.id),
+			dbState,
+		);
+
+		await waitFor(() => {
+			expect(dbState.explorer.neighborCounts).toHaveBeenCalledTimes(1);
+			expect(result.current).toHaveLength(1);
+
+			const firstResult = result.current[0];
+			expect(firstResult.label).toEqual("nodeType1");
+			expect(firstResult.value).toEqual(createVertexType("nodeType1"));
+			expect(firstResult.isDisabled).toEqual(true);
+		});
+	});
+});

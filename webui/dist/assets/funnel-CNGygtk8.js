@@ -1,0 +1,1 @@
+import{n as e,t}from"./funnel-DwL6Crol.js";export{e as __iconData,t as default};

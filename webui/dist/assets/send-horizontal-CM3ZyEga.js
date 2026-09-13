@@ -1,0 +1,1 @@
+import{n as e,t}from"./send-horizontal-BGAD_bZs.js";export{e as __iconData,t as default};

@@ -1,0 +1,1 @@
+import{n as e,t}from"./minus-BRx1oji5.js";export{e as __iconData,t as default};

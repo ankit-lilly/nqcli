@@ -1,0 +1,53 @@
+import type {
+	NeighborsRequest,
+	NeighborsResponse,
+} from "@/connector/useGEFetchTypes";
+
+import { createEdge, createVertex } from "@/core";
+
+import type { GEdgeList, GVertex } from "../types";
+import type { GremlinFetch } from "../types";
+
+import mapApiEdge from "../mappers/mapApiEdge";
+import mapApiVertex from "../mappers/mapApiVertex";
+import oneHopTemplate from "./oneHopTemplate";
+
+type RawOneHopRequest = {
+	requestId: string;
+	status: {
+		message: string;
+		code: number;
+	};
+	result: {
+		data: {
+			"@type": "g:List";
+			"@value": Array<{
+				"@type": "g:Map";
+				"@value": ["vertex", GVertex, "edges", GEdgeList];
+			}>;
+		};
+	};
+};
+
+const fetchNeighbors = async (
+	gremlinFetch: GremlinFetch,
+	req: NeighborsRequest,
+): Promise<NeighborsResponse> => {
+	const gremlinTemplate = oneHopTemplate(req);
+	const data = await gremlinFetch<RawOneHopRequest>(gremlinTemplate);
+
+	const verticesResponse = data.result.data["@value"].map((item) => ({
+		vertex: mapApiVertex(item["@value"][1]),
+		edges: item["@value"][3]["@value"].map((e) => mapApiEdge(e)),
+	}));
+	// Map directly to `Vertex` & `Edge` since these are guaranteed to be fully materialized
+	const vertices = verticesResponse.map((r) => r.vertex).map(createVertex);
+	const edges = verticesResponse.flatMap((r) => r.edges).map(createEdge);
+
+	return {
+		vertices,
+		edges,
+	};
+};
+
+export default fetchNeighbors;

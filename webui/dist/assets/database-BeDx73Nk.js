@@ -1,0 +1,1 @@
+import{n as e,t}from"./database-B1BLTPyG.js";export{e as __iconData,t as default};

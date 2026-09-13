@@ -13,6 +13,8 @@ import (
 
 type Config struct {
 	URL            string
+	DirectURL      string
+	ClusterID      string
 	AppSyncAPIName string
 	AppSyncAPIID   string
 }
@@ -108,6 +110,18 @@ func ensureDefaultEnvLoaded() {
 	})
 }
 
+const (
+	devRESTEndpoint = "https://9nyrl8j1d5-vpce-069388414a9f87f40.execute-api.us-east-2.amazonaws.com/dev/api/v1/internal/neptune/query"
+	qaRESTEndpoint  = "https://xbaoguy6re-vpce-058757a9c034d181c.execute-api.us-east-2.amazonaws.com/qa/api/v1/internal/neptune/query"
+)
+
+func FallbackEndpoint(profile string) string {
+	if strings.Contains(strings.ToLower(profile), "qa") {
+		return qaRESTEndpoint
+	}
+	return devRESTEndpoint
+}
+
 // LoadConfig returns a Config populated from environment variables. It ensures
 // the default .env file is loaded first if not already done.
 func LoadConfig() *Config {
@@ -115,6 +129,8 @@ func LoadConfig() *Config {
 
 	cfg := &Config{
 		URL:            os.Getenv("NEPTUNE_URL"),
+		DirectURL:      os.Getenv("NEPTUNE_DIRECT_URL"),
+		ClusterID:      os.Getenv("NEPTUNE_CLUSTER_ID"),
 		AppSyncAPIName: strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_NAME")),
 		AppSyncAPIID:   strings.TrimSpace(os.Getenv("NEPTUNE_APPSYNC_API_ID")),
 	}

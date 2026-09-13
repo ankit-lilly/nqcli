@@ -1,0 +1,53 @@
+import { saveAs } from "file-saver";
+
+export function toJsonFileData(input: object) {
+	return new Blob([JSON.stringify(input)], {
+		type: "application/json",
+	});
+}
+
+export function toCsvFileData(input: string) {
+	return new Blob([input], {
+		type: "text/csv;charset=UTF-8",
+	});
+}
+
+export async function fromFileToJson(blob: Blob) {
+	const textContents = await blob.text();
+	return JSON.parse(textContents) as unknown;
+}
+
+/**
+ * Saves a file using the native file save dialog if possible.
+ *
+ * If the browser does not support the native file save dialog, it will fall back
+ * to using the `file-saver` library.
+ *
+ * `description` labels the file type in the native save picker (e.g. "Graph
+ * Explorer styles"), helping the user recognize what they are saving. It has no
+ * effect on the `file-saver` fallback, which cannot set a picker label.
+ */
+export async function saveFile(
+	file: Blob,
+	defaultFileName: string,
+	description = "JSON",
+) {
+	if (!("showSaveFilePicker" in window)) {
+		saveAs(file, defaultFileName);
+		return;
+	}
+
+	const fileHandle = await window.showSaveFilePicker({
+		suggestedName: defaultFileName,
+		types: [
+			{
+				description,
+				accept: { "application/json": [".json"] },
+			},
+		],
+	});
+
+	const writable = await fileHandle.createWritable();
+	await writable.write(file);
+	await writable.close();
+}

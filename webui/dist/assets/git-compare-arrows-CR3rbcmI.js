@@ -1,0 +1,1 @@
+import{n as e,t}from"./git-compare-arrows-DeiRss9u.js";export{e as __iconData,t as default};

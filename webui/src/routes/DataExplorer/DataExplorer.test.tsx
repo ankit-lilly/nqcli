@@ -1,0 +1,173 @@
+// @vitest-environment happy-dom
+import { QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Provider } from "jotai";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { describe, expect, test, vi } from "vitest";
+
+import { TooltipProvider } from "@/components";
+import { getAppStore } from "@/core";
+import { createQueryClient } from "@/core/queryClient";
+import { createTestableVertex, DbState } from "@/utils/testing";
+
+import DataExplorer from "./DataExplorer";
+
+// Mock SchemaDiscoveryBoundary to pass through children
+vi.mock("@/components/SchemaDiscoveryBoundary", () => ({
+	SchemaDiscoveryBoundary: ({ children }: { children: React.ReactNode }) =>
+		children,
+}));
+
+function LocationDisplay() {
+	const location = useLocation();
+	return (
+		<div data-testid="location">
+			{location.pathname}
+			{location.search}
+		</div>
+	);
+}
+
+function renderDataExplorer(initialPath: string, state: DbState) {
+	const store = getAppStore();
+	state.applyTo(store);
+
+	const queryClient = createQueryClient();
+
+	return render(
+		<QueryClientProvider client={queryClient}>
+			<Provider store={store}>
+				<TooltipProvider>
+					<MemoryRouter initialEntries={[initialPath]}>
+						<Routes>
+							<Route path="/data-explorer" element={<DataExplorer />} />
+							<Route
+								path="/data-explorer/:vertexType"
+								element={<DataExplorer />}
+							/>
+						</Routes>
+						<LocationDisplay />
+					</MemoryRouter>
+				</TooltipProvider>
+			</Provider>
+		</QueryClientProvider>,
+	);
+}
+
+describe("DataExplorer", () => {
+	test("redirects to first vertex type when no vertexType param", async () => {
+		const state = new DbState();
+		const vertex = createTestableVertex().with({ types: ["Person"] });
+		state.addTestableVertexToGraph(vertex);
+
+		renderDataExplorer("/data-explorer", state);
+
+		await waitFor(() => {
+			expect(screen.getByTestId("location")).toHaveTextContent(
+				"/data-explorer/Person",
+			);
+		});
+	});
+
+	test("renders empty state when no vertexType param and no vertex types", () => {
+		const state = new DbState().withNoActiveSchema();
+
+		renderDataExplorer("/data-explorer", state);
+
+		// Should not redirect — stays at /data-explorer
+		expect(screen.getByTestId("location")).toHaveTextContent("/data-explorer");
+		// Should show the empty state message since there are no vertex types
+		expect(screen.getByText(/no .* available/i)).toBeInTheDocument();
+	});
+
+	test("shows empty state when vertexType param exists but no vertex types in schema", () => {
+		const state = new DbState().withNoActiveSchema();
+
+		renderDataExplorer("/data-explorer/Person", state);
+
+		expect(screen.getByText(/no .* available/i)).toBeInTheDocument();
+	});
+
+	test("renders content when vertexType param and vertex types exist", () => {
+		const state = new DbState();
+		const vertex = createTestableVertex().with({ types: ["Airport"] });
+		state.addTestableVertexToGraph(vertex);
+
+		renderDataExplorer("/data-explorer/Airport", state);
+
+		// Should stay on the same route
+		expect(screen.getByTestId("location")).toHaveTextContent(
+			"/data-explorer/Airport",
+		);
+		// Should not show empty state
+		expect(screen.queryByText(/no .* available/i)).not.toBeInTheDocument();
+	});
+
+	test("encodes vertex type in redirect URL", async () => {
+		const state = new DbState();
+		const vertex = createTestableVertex().with({
+			types: ["Has Space"],
+		});
+		state.addTestableVertexToGraph(vertex);
+
+		renderDataExplorer("/data-explorer", state);
+
+		await waitFor(() => {
+			expect(screen.getByTestId("location")).toHaveTextContent(
+				"/data-explorer/Has%20Space",
+			);
+		});
+	});
+
+	test("sends URL-backed search criteria to the graph query", async () => {
+		const state = new DbState();
+		const vertex = createTestableVertex().with({
+			types: ["Airport"],
+			attributes: { city: "New York" },
+		});
+		state.addTestableVertexToGraph(vertex);
+		const keywordSearch = vi.mocked(state.explorer.keywordSearch);
+		keywordSearch.mockResolvedValue({ vertices: [] });
+
+		renderDataExplorer(
+			"/data-explorer/Airport?q=JFK&field=city&page=3&pageSize=10",
+			state,
+		);
+
+		expect(screen.getByRole("searchbox", { name: "Search nodes" })).toHaveValue(
+			"JFK",
+		);
+		await waitFor(() => {
+			expect(keywordSearch).toHaveBeenCalledWith(
+				expect.objectContaining({
+					vertexTypes: ["Airport"],
+					searchTerm: "JFK",
+					searchByAttributes: ["city"],
+					exactMatch: false,
+					limit: 11,
+					offset: 20,
+				}),
+				expect.anything(),
+			);
+		});
+	});
+
+	test("updates the URL and resets pagination when search changes", async () => {
+		const state = new DbState();
+		const vertex = createTestableVertex().with({ types: ["Study"] });
+		state.addTestableVertexToGraph(vertex);
+		vi.mocked(state.explorer.keywordSearch).mockResolvedValue({ vertices: [] });
+
+		renderDataExplorer("/data-explorer/Study?page=3&pageSize=10", state);
+		fireEvent.change(screen.getByRole("searchbox", { name: "Search nodes" }), {
+			target: { value: "VIM-BE-GOOD" },
+		});
+
+		await waitFor(() => {
+			const location = screen.getByTestId("location").textContent ?? "";
+			expect(location).toContain("q=VIM-BE-GOOD");
+			expect(location).toContain("pageSize=10");
+			expect(location).not.toContain("page=3");
+		});
+	});
+});

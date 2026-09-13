@@ -1,0 +1,1 @@
+import{n as e,t}from"./circle-slash-2-aKmdnQ_4.js";export{e as __iconData,t as default};

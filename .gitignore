@@ -1,8 +1,12 @@
 nq
+nq-desktop
 *.groovy
 *.cypher
 .gocache/
 .gomodcache/
 *.env
 node_modules
-
+desktop/frontend/dist/
+internal/server/explorer_dist/
+internal/server/webui_dist/*
+!internal/server/webui_dist/.gitkeep

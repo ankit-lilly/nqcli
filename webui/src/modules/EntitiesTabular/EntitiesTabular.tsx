@@ -1,0 +1,149 @@
+import { isEmpty } from "lodash";
+import { useState } from "react";
+
+import type { TabularInstance } from "@/components/Tabular";
+
+import {
+	Button,
+	GridIcon,
+	Panel,
+	PanelHeader,
+	PanelHeaderActions,
+	PanelHeaderCloseButton,
+	PanelHeaderDivider,
+	PanelTitle,
+	ResetIcon,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components";
+import { ExportControl } from "@/components/Tabular";
+import TabularControlsProvider from "@/components/Tabular/TabularControlsProvider";
+import { useViewToggles } from "@/core";
+import useTranslations from "@/hooks/useTranslations";
+
+import { EdgesTabular, NodesTabular } from "./components";
+
+const TableId = {
+	edges: "edges",
+	nodes: "nodes",
+} as const;
+type TableId = (typeof TableId)[keyof typeof TableId];
+
+function EntitiesTabular() {
+	const t = useTranslations();
+
+	const [selectedTable, setSelectedTable] = useState<TableId>(TableId.nodes);
+	// Store tabular instances to allow use external tabular controls in the header
+	const [nodeInstance, setNodeInstance] = useState<TabularInstance<any> | null>(
+		null,
+	);
+	const [edgeInstance, setEdgeInstance] = useState<TabularInstance<any> | null>(
+		null,
+	);
+	const tableList = [
+		{
+			id: TableId.nodes,
+			component: (
+				<NodesTabular
+					ref={(ref) => {
+						setNodeInstance(ref);
+					}}
+				/>
+			),
+		},
+		{
+			id: TableId.edges,
+			component: (
+				<EdgesTabular
+					ref={(ref) => {
+						setEdgeInstance(ref);
+					}}
+				/>
+			),
+		},
+	];
+
+	const selectedTabularInstance =
+		TableId.nodes === selectedTable ? nodeInstance : edgeInstance;
+
+	const resetSortingAndFilters = () => {
+		if (!selectedTabularInstance) return;
+		selectedTabularInstance.clearFilters();
+		selectedTabularInstance.setSort([]);
+	};
+
+	return (
+		<Panel>
+			{nodeInstance && edgeInstance && selectedTabularInstance && (
+				<TabularControlsProvider tabularInstance={selectedTabularInstance}>
+					<PanelHeader>
+						<PanelTitle>
+							<GridIcon className="icon" />
+							Table View
+						</PanelTitle>
+						<PanelHeaderActions>
+							<Select
+								aria-label="Table"
+								value={selectedTable}
+								onValueChange={(tableId) => {
+									setSelectedTable(tableId as TableId);
+								}}
+							>
+								<SelectTrigger className="w-48">
+									<SelectValue placeholder="Select an entity type" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value={TableId.nodes}>
+										{t("entities-tabular.all-nodes")}
+									</SelectItem>
+									<SelectItem value={TableId.edges}>
+										{t("entities-tabular.all-edges")}
+									</SelectItem>
+								</SelectContent>
+							</Select>
+							<div className="grow" />
+							{(!isEmpty(selectedTabularInstance.filters) ||
+								!isEmpty(selectedTabularInstance.sorts)) && (
+								<Button
+									variant="ghost"
+									size="icon"
+									tooltip="Reset sorting and filters"
+									onClick={resetSortingAndFilters}
+								>
+									<ResetIcon />
+								</Button>
+							)}
+							<ExportControl />
+							<PanelHeaderDivider />
+							<CloseButton />
+						</PanelHeaderActions>
+					</PanelHeader>
+				</TabularControlsProvider>
+			)}
+			{tableList.map((table) => (
+				<div
+					key={table.id}
+					style={{
+						overflow: "hidden",
+						height: "100%",
+						width: "100%",
+						display: table.id === selectedTable ? "block" : "none",
+					}}
+				>
+					{table.component}
+				</div>
+			))}
+		</Panel>
+	);
+}
+
+function CloseButton() {
+	const { toggleTableVisibility } = useViewToggles();
+
+	return <PanelHeaderCloseButton onClose={toggleTableVisibility} />;
+}
+
+export default EntitiesTabular;

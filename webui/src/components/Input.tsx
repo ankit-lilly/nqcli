@@ -1,0 +1,26 @@
+import { cva } from "cva";
+import * as React from "react";
+
+import { cn } from "@/utils";
+
+/*
+ * DEV NOTE: There's not a set of variants here, but I wanted a consistent way
+ * to share the input styles.
+ *
+ * This style is used for color input from react-colorful.
+ */
+
+export const inputStyles = cva({
+	base: "border-input-border bg-input-background text-foreground placeholder:text-muted-foreground invalid:border-danger focus-visible:border-primary aria-invalid:border-danger flex h-10 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors file:bg-transparent file:text-sm file:font-medium focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+});
+
+export type InputProps = React.ComponentPropsWithRef<"input">;
+
+function Input({ className, type, ...props }: InputProps) {
+	return (
+		<input type={type} className={cn(inputStyles(), className)} {...props} />
+	);
+}
+Input.displayName = "Input";
+
+export { Input };

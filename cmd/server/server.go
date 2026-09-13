@@ -14,11 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type QueryService interface {
-	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
-}
-
-func NewCommand(factory func(context.Context) (QueryService, error)) *cobra.Command {
+func NewCommand(factory httpserver.ServiceFactory, currentProfile func() string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "server",
 		Short:         "Start a web UI for running Neptune queries.",
@@ -26,8 +22,17 @@ func NewCommand(factory func(context.Context) (QueryService, error)) *cobra.Comm
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			addr, _ := cmd.Flags().GetString("addr")
+			queryType, _ := cmd.Flags().GetString("type")
+			if queryType != "gremlin" && queryType != "cypher" {
+				return errors.New("--type must be 'gremlin' or 'cypher'")
+			}
+			queryEngine := queryType
+			if queryType == "cypher" {
+				queryEngine = "openCypher"
+			}
+			profile := currentProfile()
 
-			appService, err := factory(cmd.Context())
+			service, err := factory(cmd.Context(), profile)
 			if err != nil {
 				return err
 			}
@@ -37,7 +42,11 @@ func NewCommand(factory func(context.Context) (QueryService, error)) *cobra.Comm
 				TimeFormat:      time.RFC3339,
 			})
 
-			srv := httpserver.New(appService, logger)
+			srv := httpserver.NewWithOptions(service, logger, httpserver.Options{
+				Profile:        profile,
+				QueryEngine:    queryEngine,
+				ServiceFactory: factory,
+			})
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -51,5 +60,6 @@ func NewCommand(factory func(context.Context) (QueryService, error)) *cobra.Comm
 	}
 
 	cmd.Flags().String("addr", ":8080", "Address to bind the HTTP server to.")
+	cmd.Flags().String("type", "gremlin", "Query language used by the web UI: gremlin or cypher.")
 	return cmd
 }

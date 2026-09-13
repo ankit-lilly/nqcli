@@ -1,0 +1,1 @@
+import{n as e,t}from"./trash-CMn13qrL.js";export{e as __iconData,t as default};

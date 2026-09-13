@@ -1,0 +1,1 @@
+import{n as e,t}from"./fullscreen-py-YmXRY.js";export{e as __iconData,t as default};

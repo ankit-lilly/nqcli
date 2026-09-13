@@ -1,0 +1,9 @@
+{
+	"name": "@nq/graph-surface",
+	"private": true,
+	"type": "module",
+	"exports": "./src/index.ts",
+	"peerDependencies": {
+		"cytoscape": ">=3.30.0 <4"
+	}
+}

@@ -1,0 +1,23 @@
+import type { ShapeStyle } from "@/core";
+
+type LabeledShapeStyle = { label: string; value: ShapeStyle };
+
+export const NODE_SHAPE: LabeledShapeStyle[] = [
+	{ label: "Barrel", value: "barrel" },
+	{ label: "Concave Hexagon", value: "concave-hexagon" },
+	{ label: "Cut Rectangle", value: "cut-rectangle" },
+	{ label: "Diamond", value: "diamond" },
+	{ label: "Ellipse", value: "ellipse" },
+	{ label: "Heptagon", value: "heptagon" },
+	{ label: "Hexagon", value: "hexagon" },
+	{ label: "Octagon", value: "octagon" },
+	{ label: "Pentagon", value: "pentagon" },
+	{ label: "Rectangle", value: "rectangle" },
+	{ label: "Rhomboid", value: "rhomboid" },
+	{ label: "Round Diamond", value: "round-diamond" },
+	{ label: "Round Rectangle", value: "roundrectangle" },
+	{ label: "Star", value: "star" },
+	{ label: "Tag", value: "tag" },
+	{ label: "Triangle", value: "triangle" },
+	{ label: "Vee", value: "vee" },
+];

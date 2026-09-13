@@ -1,0 +1,1 @@
+import{n as e,t}from"./chevron-first-BoOpoxeN.js";export{e as __iconData,t as default};

@@ -4,38 +4,33 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/ankit-lilly/nqcli/internal/core"
 )
 
 type spyQueryService struct {
-	executeCtxCalls      int
-	executeQueryCtxCalls int
-	lastQuery            string
-	lastQueryType        string
-	lastCtx              context.Context
+	calls         int
+	lastQuery     string
+	lastQueryType string
+	lastOpts      core.QueryOpts
+	lastCtx       context.Context
 }
 
-func (s *spyQueryService) ExecuteCtx(ctx context.Context, path, queryType string) (string, string, error) {
-	s.executeCtxCalls++
-	s.lastCtx = ctx
-	s.lastQuery = path
-	s.lastQueryType = queryType
-	return "{}", "", nil
-}
-
-func (s *spyQueryService) ExecuteQueryCtx(ctx context.Context, query, queryType string) (string, string, error) {
-	s.executeQueryCtxCalls++
+func (s *spyQueryService) ExecuteQuery(ctx context.Context, query, queryType string, opts core.QueryOpts) (core.QueryResult, error) {
+	s.calls++
 	s.lastCtx = ctx
 	s.lastQuery = query
 	s.lastQueryType = queryType
-	return "{}", "", nil
+	s.lastOpts = opts
+	return core.QueryResult{Content: "{}", Processed: "{}", Raw: "{}"}, nil
 }
 
-func TestRootCommandInlineQueryCallsExecuteQueryCtx(t *testing.T) {
+func TestRootCommandInlineQuery(t *testing.T) {
 	type ctxKey struct{}
 
 	spy := &spyQueryService{}
 	origFactory := newQueryService
-	newQueryService = func(ctx context.Context) (queryService, error) { return spy, nil }
+	newQueryService = func(ctx context.Context) (core.QueryService, error) { return spy, nil }
 	t.Cleanup(func() {
 		newQueryService = origFactory
 		rootCmd.SetArgs(nil)
@@ -49,11 +44,8 @@ func TestRootCommandInlineQueryCallsExecuteQueryCtx(t *testing.T) {
 		t.Fatalf("rootCmd.Execute() returned error: %v", err)
 	}
 
-	if spy.executeQueryCtxCalls != 1 {
-		t.Fatalf("expected ExecuteQueryCtx to be called once, got %d", spy.executeQueryCtxCalls)
-	}
-	if spy.executeCtxCalls != 0 {
-		t.Fatalf("expected ExecuteCtx not to be called, got %d", spy.executeCtxCalls)
+	if spy.calls != 1 {
+		t.Fatalf("expected ExecuteQuery to be called once, got %d", spy.calls)
 	}
 	if spy.lastQuery != "g.V()" {
 		t.Fatalf("expected query 'g.V()', got %q", spy.lastQuery)
@@ -66,12 +58,12 @@ func TestRootCommandInlineQueryCallsExecuteQueryCtx(t *testing.T) {
 	}
 }
 
-func TestRootCommandFileArgumentCallsExecuteCtx(t *testing.T) {
+func TestRootCommandFileArgument(t *testing.T) {
 	type ctxKey struct{}
 
 	spy := &spyQueryService{}
 	origFactory := newQueryService
-	newQueryService = func(ctx context.Context) (queryService, error) { return spy, nil }
+	newQueryService = func(ctx context.Context) (core.QueryService, error) { return spy, nil }
 	t.Cleanup(func() {
 		newQueryService = origFactory
 		rootCmd.SetArgs(nil)
@@ -82,6 +74,9 @@ func TestRootCommandFileArgumentCallsExecuteCtx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+	if _, err := tmpFile.WriteString("g.V().count()"); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
 	tmpFile.Close()
 
 	rootCmd.SetContext(context.WithValue(context.Background(), ctxKey{}, "query-file"))
@@ -91,14 +86,11 @@ func TestRootCommandFileArgumentCallsExecuteCtx(t *testing.T) {
 		t.Fatalf("rootCmd.Execute() returned error: %v", err)
 	}
 
-	if spy.executeCtxCalls != 1 {
-		t.Fatalf("expected ExecuteCtx to be called once, got %d", spy.executeCtxCalls)
+	if spy.calls != 1 {
+		t.Fatalf("expected ExecuteQuery to be called once, got %d", spy.calls)
 	}
-	if spy.executeQueryCtxCalls != 0 {
-		t.Fatalf("expected ExecuteQueryCtx not to be called, got %d", spy.executeQueryCtxCalls)
-	}
-	if spy.lastQuery != tmpFile.Name() {
-		t.Fatalf("expected query path %q, got %q", tmpFile.Name(), spy.lastQuery)
+	if spy.lastQuery != "g.V().count()" {
+		t.Fatalf("expected query content 'g.V().count()', got %q", spy.lastQuery)
 	}
 	if spy.lastQueryType != "gremlin" {
 		t.Fatalf("expected query type 'gremlin', got %q", spy.lastQueryType)

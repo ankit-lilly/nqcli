@@ -1,0 +1,1 @@
+import{n as e,t}from"./octagon-x-Dc1tL9Pe.js";export{e as __iconData,t as default};

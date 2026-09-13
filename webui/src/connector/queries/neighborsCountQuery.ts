@@ -1,0 +1,35 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import type { VertexId } from "@/core";
+
+import type { NeighborCount } from "../useGEFetchTypes";
+
+import { getConnectionApplication } from "./helpers";
+
+/**
+ * Retrieves the number of neighbors for a given node and their types.
+ * @param vertexId The node id for which to fetch the neighbors count.
+ * @returns The count of neighbors for the given node as a total and per type.
+ */
+export function neighborsCountQuery(vertexId: VertexId) {
+	return queryOptions({
+		queryKey: ["vertex", vertexId, "neighbor", "count"],
+		queryFn: async ({ signal, meta }): Promise<NeighborCount> => {
+			const application = getConnectionApplication(meta);
+			const results = await application.queries.neighborCounts(
+				{ vertexIds: [vertexId] },
+				{ signal },
+			);
+
+			if (!results.counts.length) {
+				return {
+					vertexId,
+					totalCount: 0,
+					counts: new Map(),
+				};
+			}
+
+			return results.counts[0];
+		},
+	});
+}

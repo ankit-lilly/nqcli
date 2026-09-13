@@ -1,0 +1,111 @@
+import type { AriaTextFieldOptions } from "@react-aria/textfield";
+import type { ValueBase } from "@react-types/shared";
+import type { ReactNode, RefObject } from "react";
+
+import { useTextField } from "@react-aria/textfield";
+import { useRef } from "react";
+
+import { cn } from "@/utils";
+
+import { FormError, FormItem } from "../Form";
+import { Input } from "../Input";
+import { Label } from "../Label";
+
+export interface BaseInputProps
+	extends Omit<
+		AriaTextFieldOptions<"input">,
+		"value" | "defaultValue" | "onChange"
+	> {
+	label?: ReactNode;
+	labelPlacement?: "top" | "inner";
+	className?: string;
+	errorMessage?: string;
+	ref?: React.Ref<HTMLInputElement>;
+}
+
+interface TextInputProps extends BaseInputProps, ValueBase<string> {}
+
+interface NumberInputProps extends BaseInputProps, ValueBase<number> {
+	type: "number";
+	component?: "input";
+	min?: number;
+	max?: number;
+	step?: number;
+}
+
+export type InputFieldProps = TextInputProps | NumberInputProps;
+
+const isNumberInput = (props: InputFieldProps): props is NumberInputProps =>
+	props.type === "number";
+
+export function InputField({
+	labelPlacement = "top",
+	ref,
+	...props
+}: InputFieldProps) {
+	const { label, className, validationState, errorMessage, isDisabled } = props;
+	const localRef = useRef<HTMLInputElement>(null);
+	const { labelProps, inputProps } = useTextField(
+		{
+			...props,
+			value: isNumberInput(props)
+				? String(props.value)
+				: (props.value as string),
+			defaultValue: isNumberInput(props)
+				? String(props.defaultValue)
+				: (props.defaultValue as string),
+			onChange: isNumberInput(props)
+				? // It returns null if the field is empty
+					(v: string) =>
+						(props.onChange as (v: number | null) => void)?.(
+							v && !isNaN(Number(v)) ? Number(v) : null,
+						)
+				: (props.onChange as (v: string) => void),
+		},
+		(ref as RefObject<HTMLInputElement | null>) || localRef,
+	);
+
+	if (labelPlacement === "inner") {
+		return (
+			<FormItem className={className}>
+				<div className="relative">
+					<Input
+						className={cn("h-11 pt-4")}
+						min={isNumberInput(props) ? props.min : undefined}
+						max={isNumberInput(props) ? props.max : undefined}
+						step={isNumberInput(props) ? props.step : undefined}
+						ref={ref || localRef}
+						disabled={isDisabled}
+						{...inputProps}
+					/>
+					<div className="text-muted-foreground absolute top-1.5 left-3 text-xs leading-none">
+						{label}
+					</div>
+				</div>
+				{validationState === "invalid" && !!errorMessage && (
+					<FormError>{errorMessage}</FormError>
+				)}
+			</FormItem>
+		);
+	}
+
+	return (
+		<FormItem>
+			{label && <Label {...labelProps}>{label}</Label>}
+			<Input
+				disabled={isDisabled}
+				min={isNumberInput(props) ? props.min : undefined}
+				max={isNumberInput(props) ? props.max : undefined}
+				step={isNumberInput(props) ? props.step : undefined}
+				ref={ref || localRef}
+				{...inputProps}
+			/>
+
+			{validationState === "invalid" && errorMessage ? (
+				<FormError>{errorMessage}</FormError>
+			) : null}
+		</FormItem>
+	);
+}
+
+export default InputField;

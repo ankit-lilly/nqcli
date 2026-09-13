@@ -1,0 +1,1 @@
+import{n as e,t}from"./folder-open-dIXwgYb7.js";export{e as __iconData,t as default};

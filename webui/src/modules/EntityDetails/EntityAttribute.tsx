@@ -1,0 +1,30 @@
+import type { ComponentPropsWithoutRef } from "react";
+
+import type { DisplayAttribute } from "@/core";
+
+import { cn } from "@/utils";
+
+export type EntityAttributeProps = {
+	attribute: DisplayAttribute;
+} & ComponentPropsWithoutRef<"li">;
+
+export default function EntityAttribute({
+	attribute,
+	className,
+	...props
+}: EntityAttributeProps) {
+	return (
+		<li
+			key={attribute.name}
+			className={cn("space-y-0.5", className)}
+			{...props}
+		>
+			<div className="text-muted-foreground text-sm text-balance break-words">
+				{attribute.displayLabel}
+			</div>
+			<div className="text-foreground font-medium text-balance break-words">
+				{attribute.displayValue}
+			</div>
+		</li>
+	);
+}

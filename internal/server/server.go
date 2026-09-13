@@ -8,8 +8,10 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/ankit-lilly/nqcli/internal/core"
 	"github.com/charmbracelet/log"
 )
 
@@ -33,33 +35,70 @@ var (
 	assetFileSystem = mustSubFS(assetsFS, "assets")
 )
 
-type queryExecutor interface {
-	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
-}
-
 type Server struct {
-	app    queryExecutor
-	logger *log.Logger
-	mux    *http.ServeMux
+	serviceMu   sync.RWMutex
+	service     core.QueryService
+	factory     ServiceFactory
+	profile     string
+	queryEngine string
+	logger      *log.Logger
+	mux         *http.ServeMux
+	schema      *schemaManager
 }
 
-func New(appService queryExecutor, logger *log.Logger) *Server {
-	s := &Server{
-		app:    appService,
-		logger: logger,
-		mux:    http.NewServeMux(),
+type ServiceFactory func(context.Context, string) (core.QueryService, error)
+
+type Options struct {
+	Profile        string
+	QueryEngine    string
+	ServiceFactory ServiceFactory
+}
+
+func New(service core.QueryService, logger *log.Logger) *Server {
+	return NewWithOptions(service, logger, Options{})
+}
+
+func NewWithOptions(service core.QueryService, logger *log.Logger, opts Options) *Server {
+	queryEngine := opts.QueryEngine
+	if queryEngine == "" {
+		queryEngine = defaultQueryType
 	}
+	s := &Server{
+		service:     service,
+		factory:     opts.ServiceFactory,
+		profile:     opts.Profile,
+		queryEngine: queryEngine,
+		logger:      logger,
+		mux:         http.NewServeMux(),
+	}
+	s.schema = newSchemaManager(logger)
 
 	s.routes()
 
 	return s
 }
 
+func (s *Server) queryService() core.QueryService {
+	s.serviceMu.RLock()
+	defer s.serviceMu.RUnlock()
+	return s.service
+}
+
 func (s *Server) routes() {
-	s.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetFileSystem))))
-	s.mux.HandleFunc("/", s.handleIndex())
+	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/explorer/", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	s.mux.Handle("/minimal/assets/", http.StripPrefix("/minimal/assets/", http.FileServer(http.FS(assetFileSystem))))
+	s.mux.HandleFunc("/minimal", s.handleMinimalIndex())
+	s.mux.HandleFunc("/minimal/", s.handleMinimalIndex())
 	s.mux.HandleFunc("/healthz", s.handleHealthz())
 	s.mux.HandleFunc("/queries", s.handleExecuteQuery())
+
+	s.explorerRoutes()
 }
 
 // ServeHTTP implements [http.Handler].
@@ -110,8 +149,9 @@ func (s *Server) handleHealthz() http.HandlerFunc {
 
 func (s *Server) handleExecuteQuery() http.HandlerFunc {
 	type queryRequest struct {
-		Type  string `json:"type"`
-		Query string `json:"query"`
+		Type       string `json:"type"`
+		Query      string `json:"query"`
+		Serializer string `json:"serializer,omitempty"`
 	}
 
 	type queryResponse struct {
@@ -141,11 +181,13 @@ func (s *Server) handleExecuteQuery() http.HandlerFunc {
 			queryType = defaultQueryType
 		}
 
-		processed, raw, err := s.app.ExecuteQueryCtx(r.Context(), req.Query, queryType)
+		opts := core.QueryOpts{Serializer: req.Serializer}
+		result, err := s.queryService().ExecuteQuery(r.Context(), req.Query, queryType, opts)
+
 		resp := queryResponse{
 			Type:        queryType,
-			Processed:   processed,
-			RawResponse: raw,
+			Processed:   result.Processed,
+			RawResponse: result.Raw,
 		}
 
 		status := http.StatusOK
@@ -162,7 +204,7 @@ func (s *Server) handleExecuteQuery() http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleIndex() http.HandlerFunc {
+func (s *Server) handleMinimalIndex() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

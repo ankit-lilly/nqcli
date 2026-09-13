@@ -1,0 +1,33 @@
+import {
+	createContext,
+	type PropsWithChildren,
+	type RefObject,
+	useContext,
+	useRef,
+} from "react";
+
+import type { GraphRef } from "@/components/Graph/Graph";
+
+interface GraphContextValue {
+	graphRef: RefObject<GraphRef | null>;
+}
+
+const GraphContext = createContext<GraphContextValue | null>(null);
+
+export function GraphProvider({ children }: PropsWithChildren) {
+	const graphRef = useRef<GraphRef | null>(null);
+
+	return (
+		<GraphContext.Provider value={{ graphRef }}>
+			{children}
+		</GraphContext.Provider>
+	);
+}
+
+export function useGraphRef() {
+	const context = useContext(GraphContext);
+	if (!context) {
+		throw new Error("useGraphRef must be used within a GraphProvider");
+	}
+	return context.graphRef;
+}

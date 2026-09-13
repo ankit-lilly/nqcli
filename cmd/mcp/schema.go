@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ankit-lilly/nqcli/internal/core"
 )
 
 const staticSchemaJSON = `{
@@ -17,7 +19,9 @@ const staticSchemaJSON = `{
   "notes": [
     "Treat this schema as authoritative for vertex labels and edge labels.",
     "Do not invent property keys beyond those listed in 'properties'.",
-    "Traversal source is g."
+    "Traversal source is g.",
+    "Cross-reference edges (next_encounter, in_epoch, etc.) link siblings; they are NOT parent-child.",
+    "Entries in 'id_references' describe semantic ID links carried on properties. They are not materialized graph edges unless the same relationship also appears in 'cross_references'."
   ],
   "properties": {
     "all_vertices": [
@@ -30,7 +34,8 @@ const staticSchemaJSON = `{
       "updatedAt",
       "extensionAttributes"
     ],
-    "StudyVersion": ["versionIdentifier", "rationale"],
+    "Study": ["studyId", "systemName", "systemVersion", "usdmVersion", "is-dtf-trial", "is-pediatric-study"],
+    "StudyVersion": ["versionIdentifier", "rationale", "protocolStatus"],
     "StudyIdentifier": ["text", "scopeId"],
     "USDMSource": [
       "createdBy",
@@ -82,7 +87,18 @@ const staticSchemaJSON = `{
     "BiomedicalConceptCategory": ["members"],
     "BiomedicalConceptProperty": ["isRequired", "isEnabled", "datatype"],
     "ResponseCode": ["isEnabled"],
-    "Note": ["text"]
+    "Note": ["text"],
+    "StudyArm": ["dataOriginDescription", "populationIds"],
+    "StudyCell": ["armId", "epochId", "elementIds"],
+    "StudyDesignPopulation": ["includesHealthySubjects", "plannedSex", "criterionIds"],
+    "EligibilityCriterion": ["identifier", "criterionItemId"],
+    "SubjectEnrollment": ["forGeographicScope", "forStudyCohortId", "forStudySiteId"],
+    "Quantity": ["value"],
+    "Amendment": ["number", "summary", "previousId"],
+    "StudySite": [],
+    "StudyAmendmentReason": [],
+    "ScheduleTimelineExit": [],
+    "ExtensionAttribute": []
   },
   "known_instance_types": {
     "StudyDesign": ["InterventionalStudyDesign", "ObservationalStudyDesign"]
@@ -104,7 +120,9 @@ const staticSchemaJSON = `{
         "childLabel": "BiomedicalConceptCategory"
       },
       "biomedicalConcepts": { "edgeLabel": "has_biomedical_concept", "childLabel": "BiomedicalConcept" },
-      "roles": { "edgeLabel": "has_role", "childLabel": "StudyRole" }
+      "roles": { "edgeLabel": "has_role", "childLabel": "StudyRole" },
+      "amendments": { "edgeLabel": "has_amendment", "childLabel": "Amendment" },
+      "enrollments": { "edgeLabel": "has_enrollment", "childLabel": "SubjectEnrollment" }
     },
     "USDMSource": {
       "collaborators": { "edgeLabel": "has_collaborator", "childLabel": "Collaborator" }
@@ -123,14 +141,20 @@ const staticSchemaJSON = `{
       "model": { "edgeLabel": "has_model", "childLabel": "Code" },
       "therapeuticAreas": { "edgeLabel": "has_therapeutic_area", "childLabel": "TherapeuticArea" },
       "indications": { "edgeLabel": "has_indication", "childLabel": "Indication" },
-      "notes": { "edgeLabel": "has_note", "childLabel": "Note" }
+      "notes": { "edgeLabel": "has_note", "childLabel": "Note" },
+      "arms": { "edgeLabel": "has_arm", "childLabel": "StudyArm" },
+      "studyCells": { "edgeLabel": "has_study_cell", "childLabel": "StudyCell" },
+      "populations": { "edgeLabel": "has_population", "childLabel": "StudyDesignPopulation" },
+      "eligibilityCriteria": { "edgeLabel": "has_eligibility_criterion", "childLabel": "EligibilityCriterion" },
+      "timePerspective": { "edgeLabel": "has_time_perspective", "childLabel": "Code" }
     },
     "StudyTitle": {
       "type": { "edgeLabel": "has_type", "childLabel": "Code" }
     },
     "Organization": {
       "type": { "edgeLabel": "has_type", "childLabel": "Code" },
-      "legalAddress": { "edgeLabel": "has_address", "childLabel": "Address" }
+      "legalAddress": { "edgeLabel": "has_address", "childLabel": "Address" },
+      "managedSites": { "edgeLabel": "has_managed_site", "childLabel": "StudySite" }
     },
     "StudyRole": {
       "code": { "edgeLabel": "has_code", "childLabel": "Code" },
@@ -217,7 +241,67 @@ const staticSchemaJSON = `{
         "childLabel": "ScheduledActivityInstance"
       },
       "notes": { "edgeLabel": "has_note", "childLabel": "Note" }
-    }
+    },
+    "StudyArm": {
+      "type": { "edgeLabel": "has_type", "childLabel": "Code" },
+      "dataOriginType": { "edgeLabel": "has_data_origin_type", "childLabel": "Code" },
+      "notes": { "edgeLabel": "has_note", "childLabel": "Note" }
+    },
+    "StudyCell": {},
+    "StudyDesignPopulation": {
+      "plannedSex": { "edgeLabel": "has_planned_sex", "childLabel": "Code" },
+      "notes": { "edgeLabel": "has_note", "childLabel": "Note" }
+    },
+    "EligibilityCriterion": {
+      "category": { "edgeLabel": "has_category", "childLabel": "Code" },
+      "notes": { "edgeLabel": "has_note", "childLabel": "Note" }
+    },
+    "StudySite": {
+      "country": { "edgeLabel": "has_country", "childLabel": "Code" }
+    },
+    "SubjectEnrollment": {
+      "quantity": { "edgeLabel": "has_quantity", "childLabel": "Quantity" }
+    },
+    "Quantity": {
+      "unit": { "edgeLabel": "has_unit", "childLabel": "AliasCode" }
+    },
+    "StudyAmendmentReason": {
+      "code": { "edgeLabel": "has_code", "childLabel": "Code" }
+    },
+    "Amendment": {
+      "primaryReason": { "edgeLabel": "has_primary_reason", "childLabel": "StudyAmendmentReason" },
+      "enrollments": { "edgeLabel": "has_enrollment", "childLabel": "SubjectEnrollment" }
+    },
+    "TherapeuticArea": {},
+    "ExtensionAttribute": {}
+  },
+  "id_references": {
+    "StudyArm.populationIds": { "target": "StudyDesignPopulation", "multi": true },
+    "StudyCell.armId": { "target": "StudyArm" },
+    "StudyCell.epochId": { "target": "StudyEpoch" },
+    "StudyCell.elementIds": { "target": "StudyElement", "multi": true },
+    "StudyDesignPopulation.criterionIds": { "target": "EligibilityCriterion", "multi": true },
+    "EligibilityCriterion.criterionItemId": { "target": "EligibilityCriterionItem" },
+    "SubjectEnrollment.forStudyCohortId": { "target": "StudyCohort" },
+    "Amendment.previousId": { "target": "Amendment" }
+  },
+  "cross_references": {
+    "Study->has_latest_version->StudyVersion": "mutable pointer to the most recent version",
+    "StudyIdentifier->scoped_by->Organization": "scopeId",
+    "Encounter->next_encounter->Encounter": "linked list via previousId",
+    "Encounter->scheduled_at->ScheduledActivityInstance": "scheduledAtId",
+    "Activity->next_activity->Activity": "linked list via previousId",
+    "Activity->parent_of->Activity": "childIds",
+    "StudyEpoch->next_epoch->StudyEpoch": "linked list via previousId",
+    "ScheduledActivityInstance->in_epoch->StudyEpoch": "epochId",
+    "ScheduledActivityInstance->occurs_in->Encounter": "encounterId",
+    "ScheduledActivityInstance->includes_activity->Activity": "activityIds",
+    "ScheduledActivityInstance->exits_at->ScheduleTimelineExit": "timelineExitId",
+    "Timing->relative_from->ScheduledActivityInstance": "relativeFromScheduledInstanceId",
+    "Timing->relative_to->ScheduledActivityInstance": "relativeToScheduledInstanceId",
+    "Condition->applies_to_context->(any vertex)": "contextIds",
+    "Condition->applies_to->(any vertex)": "appliesToIds",
+    "SubjectEnrollment->for_study_site->StudySite": "forStudySiteId"
   }
 }`
 
@@ -250,7 +334,7 @@ type propertyInfo struct {
 	SampleValues []any  `json:"sample_values,omitempty"`
 }
 
-func buildGraphSchema(ctx context.Context, svc QueryService) (string, error) {
+func buildGraphSchema(ctx context.Context, svc core.QueryService) (string, error) {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv(schemaSourceEnvVar)))
 	if mode != schemaSourceDynamic {
 		return staticSchemaJSON, nil
@@ -268,7 +352,7 @@ func buildGraphSchema(ctx context.Context, svc QueryService) (string, error) {
 	return string(payload), nil
 }
 
-func discoverGraphSchema(ctx context.Context, svc QueryService) (*graphSchema, error) {
+func discoverGraphSchema(ctx context.Context, svc core.QueryService) (*graphSchema, error) {
 	vertexLabels, err := queryStringList(ctx, svc, "g.V().label().dedup()")
 	if err != nil {
 		return nil, fmt.Errorf("discover vertex labels: %w", err)
@@ -314,7 +398,7 @@ func discoverGraphSchema(ctx context.Context, svc QueryService) (*graphSchema, e
 	}, nil
 }
 
-func discoverLabelSchema(ctx context.Context, svc QueryService, isVertex bool, label string) (labelSchema, error) {
+func discoverLabelSchema(ctx context.Context, svc core.QueryService, isVertex bool, label string) (labelSchema, error) {
 	prefix := "g.E()"
 	if isVertex {
 		prefix = "g.V()"
@@ -354,7 +438,7 @@ func discoverLabelSchema(ctx context.Context, svc QueryService, isVertex bool, l
 	return labelSchema{Count: count, Properties: infos}, nil
 }
 
-func queryEnumCandidates(ctx context.Context, svc QueryService, prefix, escapedLabel, prop string) ([]any, error) {
+func queryEnumCandidates(ctx context.Context, svc core.QueryService, prefix, escapedLabel, prop string) ([]any, error) {
 	query := fmt.Sprintf(
 		"%s.hasLabel('%s').values('%s').dedup().limit(%d)",
 		prefix, escapedLabel, escapeGremlinString(prop), enumSampleLimit+1,
@@ -369,7 +453,7 @@ func queryEnumCandidates(ctx context.Context, svc QueryService, prefix, escapedL
 	return values, nil
 }
 
-func queryStringList(ctx context.Context, svc QueryService, query string) ([]string, error) {
+func queryStringList(ctx context.Context, svc core.QueryService, query string) ([]string, error) {
 	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return nil, err
@@ -395,7 +479,7 @@ func queryStringList(ctx context.Context, svc QueryService, query string) ([]str
 	}
 }
 
-func queryAnyList(ctx context.Context, svc QueryService, query string) ([]any, error) {
+func queryAnyList(ctx context.Context, svc core.QueryService, query string) ([]any, error) {
 	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return nil, err
@@ -417,7 +501,7 @@ func queryAnyList(ctx context.Context, svc QueryService, query string) ([]any, e
 	}
 }
 
-func queryEdgePatterns(ctx context.Context, svc QueryService) ([]map[string]string, error) {
+func queryEdgePatterns(ctx context.Context, svc core.QueryService) ([]map[string]string, error) {
 	raw, err := executeGremlin(ctx, svc, "g.E().project('out','label','in').by(outV().label()).by(label()).by(inV().label()).dedup()")
 	if err != nil {
 		return nil, err
@@ -446,7 +530,7 @@ func queryEdgePatterns(ctx context.Context, svc QueryService) ([]map[string]stri
 	return patterns, nil
 }
 
-func queryCount(ctx context.Context, svc QueryService, query string) (int64, error) {
+func queryCount(ctx context.Context, svc core.QueryService, query string) (int64, error) {
 	raw, err := executeGremlin(ctx, svc, query)
 	if err != nil {
 		return 0, err
@@ -469,13 +553,13 @@ func queryCount(ctx context.Context, svc QueryService, query string) (int64, err
 	return 0, fmt.Errorf("unexpected count type %T", raw)
 }
 
-func executeGremlin(ctx context.Context, svc QueryService, query string) (any, error) {
-	prettyJSON, _, err := svc.ExecuteQueryCtx(ctx, query, "gremlin")
+func executeGremlin(ctx context.Context, svc core.QueryService, query string) (any, error) {
+	result, err := svc.ExecuteQuery(ctx, query, "gremlin", core.QueryOpts{})
 	if err != nil {
 		return nil, err
 	}
 	var payload any
-	if err := json.Unmarshal([]byte(prettyJSON), &payload); err != nil {
+	if err := json.Unmarshal([]byte(result.Content), &payload); err != nil {
 		return nil, fmt.Errorf("parse gremlin response: %w", err)
 	}
 	return payload, nil

@@ -3,26 +3,19 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"strings"
 
 	mcpcmd "github.com/ankit-lilly/nqcli/cmd/mcp"
 	servercmd "github.com/ankit-lilly/nqcli/cmd/server"
-	"github.com/ankit-lilly/nqcli/internal/app"
-	"github.com/ankit-lilly/nqcli/internal/appsyncdiscovery"
+	"github.com/ankit-lilly/nqcli/internal/bootstrap"
 	"github.com/ankit-lilly/nqcli/internal/config"
-	neptune "github.com/ankit-lilly/nqcli/internal/gq"
+	"github.com/ankit-lilly/nqcli/internal/core"
 
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
-
-type queryService interface {
-	ExecuteCtx(context.Context, string, string) (string, string, error)
-	ExecuteQueryCtx(context.Context, string, string) (string, string, error)
-}
 
 var (
 	envFilePath string
@@ -31,81 +24,80 @@ var (
 	version     = "dev"
 )
 
-const devRESTEndpoint = "https://9nyrl8j1d5-vpce-069388414a9f87f40.execute-api.us-east-2.amazonaws.com/dev/api/v1/internal/neptune/query"
-const qaRESTEndpoint = "https://xbaoguy6re-vpce-058757a9c034d181c.execute-api.us-east-2.amazonaws.com/qa/api/v1/internal/neptune/query"
-
-var newGQLClient = func(ctx context.Context) (*neptune.Client, error) {
+var newQueryService = func(ctx context.Context) (core.QueryService, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
+	opts := bootstrap.Options{
+		Profile: awsProfile,
+		Region:  awsRegion,
+	}
+
 	cfg := config.LoadConfig()
 
-	cfgOpts := []func(*awscfg.LoadOptions) error{}
-	if awsProfile != "" {
-		cfgOpts = append(cfgOpts, awscfg.WithSharedConfigProfile(awsProfile))
-	}
-	if awsRegion != "" {
-		cfgOpts = append(cfgOpts, awscfg.WithRegion(awsRegion))
+	opts.URL = cfg.URL
+	return bootstrap.Build(ctx, opts)
+}
+
+func serviceFactory(ctx context.Context) (core.QueryService, error) {
+	return newQueryService(ctx)
+}
+
+func profileServiceFactory(ctx context.Context, profile string) (core.QueryService, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	awsCfg, err := awscfg.LoadDefaultConfig(ctx, cfgOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("load AWS configuration: %w", err)
+	opts := bootstrap.Options{
+		Profile: profile,
+		Region:  awsRegion,
 	}
 
-	if awsCfg.Region == "" {
-		awsCfg.Region = "us-east-2"
-	}
+	cfg := config.LoadConfig()
+	opts.URL = cfg.URL
+	return bootstrap.Build(ctx, opts)
+}
 
-	if cfg.URL == "" {
-		profileName := awsProfile
-		if profileName == "" {
-			profileName = os.Getenv("AWS_PROFILE")
-		}
-		url, err := appsyncdiscovery.ResolveAppSyncURL(ctx, awsCfg, appsyncdiscovery.ResolveOptions{
-			Profile: profileName,
-			APIName: cfg.AppSyncAPIName,
-			APIID:   cfg.AppSyncAPIID,
-		})
-		if err != nil {
-			if strings.Contains(strings.ToLower(profileName), "qa") {
-				cfg.URL = qaRESTEndpoint
-			} else {
-				cfg.URL = devRESTEndpoint
+func readQuery(args []string) (query string, err error) {
+	if len(args) > 0 {
+		input := args[0]
+		info, statErr := os.Stat(input)
+		switch {
+		case statErr == nil && info.IsDir():
+			return "", fmt.Errorf("provided path %q is a directory, expected a file", input)
+		case statErr == nil:
+			content, readErr := os.ReadFile(input)
+			if readErr != nil {
+				return "", fmt.Errorf("failed to read query file: %w", readErr)
 			}
-		} else {
-			cfg.URL = url
+			return string(content), nil
+		case os.IsNotExist(statErr):
+			return input, nil
+		default:
+			return "", fmt.Errorf("failed to stat %q: %w", input, statErr)
 		}
 	}
 
-	if cfg.URL == "" {
-		return nil, fmt.Errorf("neptune endpoint is required; set NEPTUNE_URL or configure discovery")
+	fi, statErr := os.Stdin.Stat()
+	if statErr != nil {
+		return "", fmt.Errorf("failed to stat stdin: %w", statErr)
+	}
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		content, readErr := io.ReadAll(os.Stdin)
+		if readErr != nil {
+			return "", fmt.Errorf("failed to read stdin: %w", readErr)
+		}
+		return string(content), nil
 	}
 
-	return neptune.NewClient(cfg, awsCfg)
-}
-
-var newQueryService = func(ctx context.Context) (queryService, error) {
-	neptuneClient, err := newGQLClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return app.NewAppService(neptuneClient), nil
-}
-
-func mcpServiceFactory(ctx context.Context) (mcpcmd.QueryService, error) {
-	return newQueryService(ctx)
-}
-
-func serverServiceFactory(ctx context.Context) (servercmd.QueryService, error) {
-	return newQueryService(ctx)
+	return "", fmt.Errorf("no query provided. Use 'echo \"query\" | nq' or 'nq <query_file>' or 'nq \"query\"'")
 }
 
 var rootCmd = &cobra.Command{
 	Use:   "nq [query_file|query]",
-	Short: "Execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.",
-	Long: `A CLI tool to execute Gremlin or Cypher queries against a Neptune GraphQL endpoint.
+	Short: "Execute Gremlin or Cypher queries against SDR.",
+	Long: `A CLI tool to execute Gremlin or Cypher queries against SDR Neptune.
 	Usage:
 	    echo "query" | nq [--type gremlin|cypher]
 	    nq [--type gremlin|cypher] "query"
@@ -115,42 +107,19 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var (
-			queryFile   string
-			inlineQuery string
-		)
-		if len(args) > 0 {
-			input := args[0]
-			info, err := os.Stat(input)
-			switch {
-			case err == nil && info.IsDir():
-				return fmt.Errorf("provided path %q is a directory, expected a file", input)
-			case err == nil:
-				queryFile = input
-			case os.IsNotExist(err):
-				inlineQuery = input
-			default:
-				return fmt.Errorf("failed to stat %q: %w", input, err)
-			}
-		}
-
-		queryType, _ := cmd.Flags().GetString("type")
-
-		appService, err := newQueryService(cmd.Context())
+		query, err := readQuery(args)
 		if err != nil {
 			return err
 		}
 
-		var (
-			prettyJSON string
-			execErr    error
-		)
+		queryType, _ := cmd.Flags().GetString("type")
 
-		if inlineQuery != "" {
-			prettyJSON, _, execErr = appService.ExecuteQueryCtx(cmd.Context(), inlineQuery, queryType)
-		} else {
-			prettyJSON, _, execErr = appService.ExecuteCtx(cmd.Context(), queryFile, queryType)
+		service, err := newQueryService(cmd.Context())
+		if err != nil {
+			return err
 		}
+
+		result, execErr := service.ExecuteQuery(cmd.Context(), query, queryType, core.QueryOpts{})
 		if execErr != nil {
 			l := log.NewWithOptions(os.Stderr, log.Options{ReportTimestamp: false})
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Bold(true)
@@ -158,7 +127,7 @@ var rootCmd = &cobra.Command{
 			return execErr
 		}
 
-		fmt.Println(prettyJSON)
+		fmt.Println(result.Processed)
 		return nil
 	},
 }
@@ -180,7 +149,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&awsProfile, "aws-profile", "",
 		"Optional AWS shared config profile to use for authentication.")
 	rootCmd.PersistentFlags().StringVar(&awsRegion, "aws-region", "",
-		"Override the AWS region when signing AppSync requests.")
+		"Override the AWS region.")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		return config.LoadEnvironment(envFilePath)
@@ -197,6 +166,6 @@ func init() {
 		return nil
 	}
 
-	rootCmd.AddCommand(mcpcmd.NewCommand(mcpServiceFactory, version))
-	rootCmd.AddCommand(servercmd.NewCommand(serverServiceFactory))
+	rootCmd.AddCommand(mcpcmd.NewCommand(serviceFactory, version))
+	rootCmd.AddCommand(servercmd.NewCommand(profileServiceFactory, func() string { return awsProfile }))
 }

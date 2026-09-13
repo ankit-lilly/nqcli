@@ -1,0 +1,113 @@
+import { LABELS } from "@/utils";
+
+import { createVertex } from "./vertex";
+
+describe("createVertex", () => {
+	it("should create a vertex with a single type", () => {
+		const vertex = createVertex({
+			id: "1",
+			types: ["Person"],
+			attributes: {
+				name: "Alice",
+			},
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: "Person",
+			types: ["Person"],
+			attributes: {
+				name: "Alice",
+			},
+		});
+	});
+
+	it("should create a vertex with multiple types", () => {
+		const vertex = createVertex({
+			id: "1",
+			types: ["Person", "Worker"],
+			attributes: {
+				name: "Alice",
+			},
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: "Person",
+			types: ["Person", "Worker"],
+			attributes: {
+				name: "Alice",
+			},
+		});
+	});
+
+	it("should create a vertex with missing types", () => {
+		const vertex = createVertex({
+			id: "1",
+			attributes: {
+				name: "Alice",
+			},
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: LABELS.MISSING_TYPE,
+			types: [LABELS.MISSING_TYPE],
+			attributes: {
+				name: "Alice",
+			},
+		});
+	});
+
+	it("should create a vertex with missing attributes", () => {
+		const vertex = createVertex({
+			id: "1",
+			types: ["Person"],
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: "Person",
+			types: ["Person"],
+			attributes: {},
+		});
+	});
+
+	it("should create a vertex with no attributes", () => {
+		const vertex = createVertex({
+			id: "1",
+			types: ["Person"],
+			attributes: {},
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: "Person",
+			types: ["Person"],
+			attributes: {},
+		});
+	});
+
+	it("should create a vertex with attributes as a map", () => {
+		const vertex = createVertex({
+			id: "1",
+			types: ["Person"],
+			attributes: {
+				name: "Alice",
+				age: 30,
+				isMarried: true,
+			},
+		});
+
+		expect(vertex).toStrictEqual({
+			id: "1",
+			type: "Person",
+			types: ["Person"],
+			attributes: {
+				name: "Alice",
+				age: 30,
+				isMarried: true,
+			},
+		});
+	});
+});

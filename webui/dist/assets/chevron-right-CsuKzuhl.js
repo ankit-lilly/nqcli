@@ -1,0 +1,1 @@
+import{n as e,t}from"./chevron-right-BCCXbJ7V.js";export{e as __iconData,t as default};

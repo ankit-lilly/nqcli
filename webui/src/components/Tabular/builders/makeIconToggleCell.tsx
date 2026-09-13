@@ -1,0 +1,35 @@
+import type { ReactNode } from "react";
+
+import { Button } from "@/components";
+
+import type { CellComponentProps } from "../useTabular";
+
+type IconActionCellProps<T extends object> = {
+	title: string;
+	on: ReactNode;
+	off: ReactNode;
+	getValue: (props: CellComponentProps<T>) => boolean;
+	onPress?(props: CellComponentProps<T>): void;
+};
+
+export default function makeIconActionCell<T extends object>({
+	title,
+	on,
+	off,
+	getValue,
+	onPress,
+}: IconActionCellProps<T>) {
+	return (props: CellComponentProps<T>) => {
+		return (
+			<Button
+				size="small"
+				variant="ghost"
+				tooltip={title}
+				onClick={() => onPress?.(props)}
+				className="active:bg-primary-subtle-hover text-primary hover:text-primary-foreground w-full cursor-pointer hover:bg-transparent"
+			>
+				{getValue(props) ? on : off}
+			</Button>
+		);
+	};
+}

@@ -1,0 +1,328 @@
+import { atom, useAtom, useSetAtom } from "jotai";
+
+import {
+	Button,
+	ColorPopover,
+	EdgePreview,
+	Field,
+	FieldGroup,
+	FieldLabel,
+	FieldLegend,
+	FieldSet,
+	NumberInput,
+	PreviewSurface,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components";
+import {
+	Dialog,
+	DialogBody,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/Dialog";
+import { type EdgeType, useDisplayEdgeTypeConfig } from "@/core";
+import {
+	type ArrowStyle,
+	type LineStyle,
+	useEdgeStyling,
+} from "@/core/StateProvider/graphStyles";
+import { useTextTransform } from "@/hooks";
+import useTranslations from "@/hooks/useTranslations";
+import { RESERVED_TYPES_PROPERTY } from "@/utils";
+
+import { ARROW_STYLE_OPTIONS } from "./arrowsStyling";
+import { LINE_STYLE_OPTIONS } from "./lineStyling";
+
+const customizeEdgeTypeAtom = atom<EdgeType | undefined>(undefined);
+
+/**
+ * Open the dialog to customize the edge style
+ * @returns callback to open the dialog
+ */
+export function useOpenEdgeStyleDialog() {
+	const setCustomizeEdgeType = useSetAtom(customizeEdgeTypeAtom);
+
+	return (edgeType: EdgeType) => {
+		setCustomizeEdgeType(edgeType);
+	};
+}
+
+export function EdgeStyleDialog() {
+	const [customizeEdgeType, setCustomizeEdgeType] = useAtom(
+		customizeEdgeTypeAtom,
+	);
+
+	return (
+		<Dialog
+			open={Boolean(customizeEdgeType)}
+			onOpenChange={(open) => !open && setCustomizeEdgeType(undefined)}
+		>
+			{customizeEdgeType ? <Content edgeType={customizeEdgeType} /> : null}
+		</Dialog>
+	);
+}
+
+function Content({ edgeType }: { edgeType: EdgeType }) {
+	const displayConfig = useDisplayEdgeTypeConfig(edgeType);
+	const t = useTranslations();
+	const textTransform = useTextTransform();
+
+	const { edgeStyle, setEdgeStyle, resetEdgeStyle } = useEdgeStyling(edgeType);
+
+	const hideDisplayNameAttribute = false;
+	const selectOptions = (() => {
+		const options = displayConfig.attributes.map((attr) => ({
+			value: attr.name,
+			label: attr.displayLabel,
+		}));
+
+		options.unshift({
+			label: t("edge-type"),
+			value: RESERVED_TYPES_PROPERTY,
+		});
+
+		return options;
+	})();
+
+	return (
+		<DialogContent className="max-w-2xl">
+			<form className="flex min-h-0 flex-col">
+				<DialogHeader>
+					<DialogTitle>Customize Your {t("edge")} Style</DialogTitle>
+					<DialogDescription>
+						Changes here override the default style for this {t("edge-type")}.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					<FieldSet>
+						<Field>
+							<FieldLabel className="sr-only">Preview</FieldLabel>
+							<PreviewSurface>
+								<EdgePreview
+									edgeStyle={edgeStyle}
+									transform={textTransform}
+									className="zoom-90 px-4 py-3"
+								/>
+							</PreviewSurface>
+						</Field>
+
+						{hideDisplayNameAttribute ? null : (
+							<FieldGroup>
+								<Field>
+									<FieldLabel>Display Name {t("property")}</FieldLabel>
+									<Select
+										value={edgeStyle.displayNameAttribute}
+										onValueChange={(value) =>
+											setEdgeStyle({ displayNameAttribute: value })
+										}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a display attribute" />
+										</SelectTrigger>
+										<SelectContent>
+											{selectOptions.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													{option.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							</FieldGroup>
+						)}
+
+						<FieldSet>
+							<FieldLegend>Label Styling</FieldLegend>
+							<FieldGroup className="grid grid-cols-2 gap-4">
+								<Field>
+									<FieldLabel>Background Color</FieldLabel>
+									<ColorPopover
+										color={edgeStyle.labelColor}
+										onColorChange={(color) =>
+											setEdgeStyle({ labelColor: color })
+										}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel>Background Opacity</FieldLabel>
+									<NumberInput
+										min={0}
+										max={1}
+										step={0.1}
+										value={edgeStyle.labelBackgroundOpacity}
+										onValueChange={(labelBackgroundOpacity) =>
+											setEdgeStyle({ labelBackgroundOpacity })
+										}
+									/>
+								</Field>
+							</FieldGroup>
+							<FieldGroup className="grid grid-cols-3 gap-4">
+								<Field>
+									<FieldLabel>Border Color</FieldLabel>
+									<ColorPopover
+										color={edgeStyle.labelBorderColor}
+										onColorChange={(color) =>
+											setEdgeStyle({ labelBorderColor: color })
+										}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel>Border Width</FieldLabel>
+									<NumberInput
+										min={0}
+										step={0.5}
+										value={edgeStyle.labelBorderWidth}
+										onValueChange={(labelBorderWidth) =>
+											setEdgeStyle({ labelBorderWidth })
+										}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel>Border Style</FieldLabel>
+									<Select
+										value={edgeStyle.labelBorderStyle}
+										onValueChange={(value) =>
+											setEdgeStyle({ labelBorderStyle: value as LineStyle })
+										}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a border style" />
+										</SelectTrigger>
+										<SelectContent>
+											{LINE_STYLE_OPTIONS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													<div className="flex flex-row items-center gap-3">
+														{option.label}
+														{option.icon}
+													</div>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							</FieldGroup>
+						</FieldSet>
+						<FieldSet>
+							<FieldLegend>Line Styling</FieldLegend>
+							<FieldGroup className="grid grid-cols-3 gap-4">
+								<Field>
+									<FieldLabel>Line Color</FieldLabel>
+									<ColorPopover
+										color={edgeStyle.lineColor}
+										onColorChange={(color) =>
+											setEdgeStyle({ lineColor: color })
+										}
+									/>
+								</Field>
+
+								<Field>
+									<FieldLabel>Line Thickness</FieldLabel>
+									<NumberInput
+										min={1}
+										step={0.5}
+										value={edgeStyle.lineThickness}
+										onValueChange={(lineThickness) =>
+											setEdgeStyle({ lineThickness })
+										}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel>Line Style</FieldLabel>
+									<Select
+										value={edgeStyle.lineStyle}
+										onValueChange={(value) =>
+											setEdgeStyle({ lineStyle: value as LineStyle })
+										}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a line style" />
+										</SelectTrigger>
+										<SelectContent>
+											{LINE_STYLE_OPTIONS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													<div className="flex flex-row items-center gap-3">
+														{option.label}
+														{option.icon}
+													</div>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							</FieldGroup>
+							<FieldGroup className="grid grid-cols-2 gap-4">
+								<Field>
+									<FieldLabel>Source Arrow Style</FieldLabel>
+									<Select
+										value={edgeStyle.sourceArrowStyle}
+										onValueChange={(value) =>
+											setEdgeStyle({ sourceArrowStyle: value as ArrowStyle })
+										}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a source arrow style" />
+										</SelectTrigger>
+										<SelectContent>
+											{ARROW_STYLE_OPTIONS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													<div className="flex flex-row items-center gap-3">
+														{option.label}
+														<option.Icon className="rotate-180" />
+													</div>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+								<Field>
+									<FieldLabel>Target Arrow Style</FieldLabel>
+									<Select
+										value={edgeStyle.targetArrowStyle}
+										onValueChange={(value) =>
+											setEdgeStyle({ targetArrowStyle: value as ArrowStyle })
+										}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select a target arrow style" />
+										</SelectTrigger>
+										<SelectContent>
+											{ARROW_STYLE_OPTIONS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													<div className="flex flex-row items-center gap-3">
+														{option.label}
+														<option.Icon />
+													</div>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							</FieldGroup>
+						</FieldSet>
+					</FieldSet>
+				</DialogBody>
+				<DialogFooter className="sm:justify-between">
+					<Button
+						type="button"
+						variant="outline-danger"
+						onClick={resetEdgeStyle}
+					>
+						Clear Customization
+					</Button>
+					<DialogClose asChild>
+						<Button type="button" variant="primary">
+							Done
+						</Button>
+					</DialogClose>
+				</DialogFooter>
+			</form>
+		</DialogContent>
+	);
+}

@@ -1,0 +1,1 @@
+import{n as e,t}from"./triangle-alert-CdZaYrI0.js";export{e as __iconData,t as default};

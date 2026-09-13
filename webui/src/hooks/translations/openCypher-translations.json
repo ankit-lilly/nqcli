@@ -1,0 +1,52 @@
+{
+	"node": "Node",
+	"nodes": "Nodes",
+	"edge": "Relationship",
+	"edges": "Relationships",
+	"node-id": "Node Id",
+	"node-type": "Node Label",
+	"node-types": "Node Labels",
+	"edge-id": "Relationship Id",
+	"edge-type": "Relationship Type",
+	"edge-types": "Relationship Types",
+	"source-id": "Source Id",
+	"source-type": "Source Label",
+	"target-id": "Target Id",
+	"target-type": "Target Label",
+	"property": "Property",
+	"properties": "Properties",
+	"edge-connection": "Relationship",
+	"edge-connections": "Relationships",
+	"query-language": "PG-openCypher",
+
+	"keyword-search": {
+		"node-type-placeholder": "Select a node label",
+		"node-attribute-placeholder": "Select a property"
+	},
+	"connection-detail": {
+		"search-placeholder": "Search for node label",
+		"no-search-title": "No Node Labels",
+		"no-search-subtitle": "No node labels found with searched criteria",
+		"no-elements-title": "No Nodes",
+		"no-elements-subtitle": "No nodes found to be shown in this list"
+	},
+	"node-expand": {
+		"edge-selection-title": "Relationship Selection",
+		"edge-selection-subtitle": "Select a node to expand its connections",
+		"no-selection-title": "No Selection",
+		"no-selection-subtitle": "Select a node to expand its connections",
+		"multi-selection-title": "Multiple Selection",
+		"multi-selection-subtitle": "Select a single node to expand its connections",
+		"no-connections-title": "Unconnected Node",
+		"no-connections-subtitle": "This node has no connection. Therefore, it is not expandable",
+		"no-unfetched-title": "Nothing to Expand",
+		"no-unfetched-subtitle": "This node has been completely expanded",
+		"neighbors-of-type": "Expand neighbors with label"
+	},
+	"entities-tabular": {
+		"all-nodes": "All Nodes",
+		"all-edges": "All Relationships",
+		"nodes-placeholder": "Add a node in the Graph View to see its data",
+		"edges-placeholder": "Add a node in the Graph View to see its connections"
+	}
+}
