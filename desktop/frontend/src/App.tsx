@@ -188,7 +188,7 @@ export default function App() {
 					<SplitPane
 						class="h-full"
 						direction="horizontal"
-						initialSize={340}
+						initialSize={0.27}
 						minSize={270}
 						minSecond={420}
 						sizedPane="second"
@@ -297,7 +297,7 @@ export default function App() {
 					<SplitPane
 						class="flex-1"
 						direction="vertical"
-						initialSize={205}
+						initialSize={0.26}
 						minSize={128}
 						minSecond={300}
 						storageKey="nq-query-editor-height"

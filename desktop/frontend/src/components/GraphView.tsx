@@ -30,6 +30,7 @@ import type {
 	GraphElementData,
 	GraphSelection,
 } from "../domain/graph";
+import { graphTopologyKey } from "../domain/graph";
 import { DEFAULT_NODE_COLOR, NODE_LABEL_COLORS } from "../domain/graph-style";
 
 cytoscape.use(dagre);
@@ -77,6 +78,7 @@ interface Props {
 	onExpand?: (id: string) => void;
 	onClear?: () => void;
 	emptyMessage?: string;
+	focusSelection?: boolean;
 }
 
 function resolveHex(varName: string, fallback: string): string {
@@ -128,11 +130,15 @@ export default function GraphView(props: Props) {
 	let surface: CytoscapeSurface | undefined;
 	let cy: Core | undefined;
 	let currentElements: GraphElement[] | undefined;
+	let currentTopology = "";
+	let lastFocusedSelection = "";
 	let activeCyLayout: ReturnType<Core["layout"]> | undefined;
 	let resizeObserver: ResizeObserver | undefined;
 	let resizeFrame = 0;
+	let fitFrame = 0;
 	const [activeLayout, setActiveLayout] = createSignal("dagre-tb");
 	const [fullscreen, setFullscreen] = createSignal(false);
+	const [surfaceReady, setSurfaceReady] = createSignal(false);
 	const [themeKey, setThemeKey] = createSignal(0);
 	const [rendering, setRendering] = createStore({
 		nodeLabels: true,
@@ -264,6 +270,14 @@ export default function GraphView(props: Props) {
 				hideEdgesOnViewport: true,
 			} as any,
 			{
+				onLayoutRunningChanged: (running) => {
+					if (running) return;
+					cancelAnimationFrame(fitFrame);
+					fitFrame = requestAnimationFrame(() => {
+						cy?.resize();
+						if (cy && cy.nodes().length > 0) surface?.fit(40);
+					});
+				},
 				onNodeClick: (data) =>
 					props.setSelectedElement({
 						group: "nodes",
@@ -284,8 +298,10 @@ export default function GraphView(props: Props) {
 		surface.mount(containerRef);
 		cy = surface.cytoscape;
 		cy?.style(cyStyle);
+		setSurfaceReady(true);
 		resizeObserver = new ResizeObserver(() => {
 			cancelAnimationFrame(resizeFrame);
+			cancelAnimationFrame(fitFrame);
 			resizeFrame = requestAnimationFrame(() => cy?.resize());
 		});
 		resizeObserver.observe(containerRef);
@@ -295,6 +311,7 @@ export default function GraphView(props: Props) {
 			activeCyLayout?.stop();
 			resizeObserver?.disconnect();
 			cancelAnimationFrame(resizeFrame);
+			cancelAnimationFrame(fitFrame);
 			themeObserver.disconnect();
 			window.removeEventListener("keydown", onKeyDown);
 			surface?.destroy();
@@ -367,15 +384,19 @@ export default function GraphView(props: Props) {
 
 	createEffect(() => {
 		themeKey();
+		if (!surfaceReady()) return;
 		applyRendering();
 	});
 
 	createEffect(() => {
 		const elements = props.elements();
-		if (!cy) return;
+		if (!surfaceReady() || !cy) return;
+		const nextTopology = graphTopologyKey(elements);
+		const topologyChanged = nextTopology !== currentTopology;
 		savePositions();
 		currentElements = elements;
-		activeCyLayout?.stop();
+		currentTopology = nextTopology;
+		if (topologyChanged) activeCyLayout?.stop();
 		if (elements.length === 0) {
 			cy.elements().remove();
 			return;
@@ -387,22 +408,26 @@ export default function GraphView(props: Props) {
 				.elements()
 				.filter((element) => !incoming.has(element.id()))
 				.remove();
-			for (const element of elements) {
-				const data = {
-					...element.data,
-					displayName: String(
-						element.data.name ||
-							element.data.decode ||
-							element.data.label ||
-							"",
-					).slice(0, 60),
-				};
-				const existing = cy!.getElementById(element.data.id);
-				if (existing.length) existing.data(data);
-				else cy!.add({ group: element.group, data } as any);
+			for (const group of ["nodes", "edges"] as const) {
+				for (const element of elements) {
+					if (element.group !== group) continue;
+					const data = {
+						...element.data,
+						displayName: String(
+							element.data.name ||
+								element.data.decode ||
+								element.data.label ||
+								"",
+						).slice(0, 60),
+					};
+					const existing = cy!.getElementById(element.data.id);
+					if (existing.length) existing.data(data);
+					else cy!.add({ group: element.group, data } as any);
+				}
 			}
 		});
 		applyRendering();
+		if (!topologyChanged) return;
 		if (saved) {
 			cy.nodes().positions(
 				(node) => saved.positions[node.id()] ?? { x: 0, y: 0 },
@@ -417,12 +442,25 @@ export default function GraphView(props: Props) {
 
 	createEffect(() => {
 		const selected = props.selectedElement();
+		if (!surfaceReady()) return;
 		surface?.setSelection({
 			nodeIds: new Set(selected?.group === "nodes" ? [selected.data.id] : []),
 			edgeIds: new Set(selected?.group === "edges" ? [selected.data.id] : []),
 			groupIds: new Set(),
 		});
 		applyRendering();
+		const selectedID = selected?.data.id ?? "";
+		if (
+			props.focusSelection &&
+			selectedID &&
+			selectedID !== lastFocusedSelection
+		) {
+			const element = cy?.getElementById(selectedID);
+			if (element?.length) {
+				cy?.animate({ center: { eles: element }, duration: 220 });
+			}
+		}
+		lastFocusedSelection = selectedID;
 	});
 
 	function runLayout(key = activeLayout(), animate = true) {
@@ -614,7 +652,10 @@ export default function GraphView(props: Props) {
 				</button>
 			</div>
 			<div class="relative flex-1 min-h-0">
-				<div ref={containerRef!} class="cytoscape-canvas absolute inset-0" />
+				<div
+					ref={containerRef!}
+					class="cytoscape-canvas absolute inset-0 size-full min-h-px min-w-px"
+				/>
 				<Show when={props.elements().length === 0}>
 					<div class="pointer-events-none absolute inset-0 grid place-items-center text-sm text-base-content/45">
 						{props.emptyMessage ?? "Run a graph query to begin."}

@@ -82,3 +82,18 @@ export function graphLabels(elements: GraphElement[]) {
 		relationshipLabels: [...relationshipLabels].sort(),
 	};
 }
+
+/** Stable identity for the rendered topology, independent of result ordering. */
+export function graphTopologyKey(elements: GraphElement[]): string {
+	return elements
+		.map((element) =>
+			[
+				element.group,
+				element.data.id,
+				element.data.source ?? "",
+				element.data.target ?? "",
+			].join("\u0000"),
+		)
+		.sort()
+		.join("\u001e");
+}

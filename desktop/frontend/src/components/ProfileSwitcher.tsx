@@ -1,13 +1,6 @@
+import Popover from "@corvu/popover";
 import { Check, ChevronDown } from "lucide-solid";
-import {
-	For,
-	Show,
-	createEffect,
-	createSignal,
-	onCleanup,
-	onMount,
-} from "solid-js";
-import { Portal } from "solid-js/web";
+import { For, Show, createSignal, onMount } from "solid-js";
 import { DesktopService } from "../../bindings/github.com/ankit-lilly/nqcli/internal/desktop";
 
 interface Props {
@@ -29,8 +22,6 @@ const ENV_COLORS: Record<string, string> = {
 };
 
 export default function ProfileSwitcher(props: Props) {
-	let trigger!: HTMLButtonElement;
-	let menu!: HTMLDivElement;
 	const [info, setInfo] = createSignal<ProfileInfo>({
 		profile: "",
 		env: "dev",
@@ -40,17 +31,6 @@ export default function ProfileSwitcher(props: Props) {
 	const [error, setError] = createSignal("");
 	const [loaded, setLoaded] = createSignal(false);
 	const [open, setOpen] = createSignal(false);
-	const [position, setPosition] = createSignal({ top: 0, left: 0, width: 208 });
-
-	function placeMenu() {
-		const bounds = trigger.getBoundingClientRect();
-		const width = 208;
-		setPosition({
-			top: bounds.bottom + 6,
-			left: Math.min(bounds.left, window.innerWidth - width - 8),
-			width,
-		});
-	}
 
 	onMount(async () => {
 		try {
@@ -62,29 +42,6 @@ export default function ProfileSwitcher(props: Props) {
 		} finally {
 			setLoaded(true);
 		}
-	});
-
-	createEffect(() => {
-		if (!open()) return;
-		placeMenu();
-		const closeOutside = (event: PointerEvent) => {
-			const target = event.target as Node;
-			if (!trigger.contains(target) && !menu?.contains(target)) setOpen(false);
-		};
-		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				setOpen(false);
-				trigger.focus();
-			}
-		};
-		window.addEventListener("pointerdown", closeOutside);
-		window.addEventListener("keydown", closeOnEscape);
-		window.addEventListener("resize", placeMenu);
-		onCleanup(() => {
-			window.removeEventListener("pointerdown", closeOutside);
-			window.removeEventListener("keydown", closeOnEscape);
-			window.removeEventListener("resize", placeMenu);
-		});
 	});
 
 	async function switchTo(profile: string) {
@@ -123,52 +80,45 @@ export default function ProfileSwitcher(props: Props) {
 					</div>
 				}
 			>
-				<button
-					ref={trigger!}
-					type="button"
-					class="btn btn-ghost btn-xs gap-1.5"
-					aria-haspopup="menu"
-					aria-expanded={open()}
-					disabled={switching()}
-					onClick={() => setOpen((value) => !value)}
+				<Popover
+					open={open()}
+					onOpenChange={setOpen}
+					placement="bottom-start"
+					strategy="fixed"
+					floatingOptions={{ offset: 6, flip: true, shift: { padding: 8 } }}
 				>
-					<Show
-						when={!switching()}
-						fallback={<span class="loading loading-spinner loading-xs" />}
+					<Popover.Trigger
+						type="button"
+						class="btn btn-ghost btn-xs gap-1.5"
+						disabled={switching()}
 					>
-						<span
-							class="size-2 shrink-0 rounded-full"
-							style={{ "background-color": envColor() }}
-						/>
-						<span>{info().profile || "default"}</span>
-						<span
-							class="rounded bg-base-content/5 px-1.5 py-0.5 text-[10px] font-bold uppercase"
-							style={{ color: envColor() }}
+						<Show
+							when={!switching()}
+							fallback={<span class="loading loading-spinner loading-xs" />}
 						>
-							{info().env}
-						</span>
-						<ChevronDown size={12} class="opacity-45" />
-					</Show>
-				</button>
-				<Show when={open()}>
-					<Portal>
-						<div
-							ref={menu!}
-							role="menu"
-							class="fixed z-[1000] border border-base-300 bg-base-100 p-1.5 text-base-content shadow-xl"
-							style={{
-								top: `${position().top}px`,
-								left: `${position().left}px`,
-								width: `${position().width}px`,
-							}}
-						>
-							<div class="px-2 py-1 text-[10px] font-semibold uppercase text-base-content/45">
+							<span
+								class="size-2 shrink-0 rounded-full"
+								style={{ "background-color": envColor() }}
+							/>
+							<span>{info().profile || "default"}</span>
+							<span
+								class="rounded bg-base-content/5 px-1.5 py-0.5 text-[10px] font-bold uppercase"
+								style={{ color: envColor() }}
+							>
+								{info().env}
+							</span>
+							<ChevronDown size={12} class="opacity-45" />
+						</Show>
+					</Popover.Trigger>
+					<Popover.Portal>
+						<Popover.Content class="z-[1000] w-52 border border-base-300 bg-base-100 p-1.5 text-base-content shadow-xl">
+							<Popover.Label class="px-2 py-1 text-[10px] font-semibold uppercase text-base-content/45">
 								AWS profiles
-							</div>
+							</Popover.Label>
 							<For each={info().profiles}>
 								{(profile) => (
 									<button
-										role="menuitem"
+										type="button"
 										class={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-base-200 ${profile === info().profile ? "bg-primary/10 text-primary" : ""}`}
 										onClick={() => void switchTo(profile)}
 									>
@@ -184,9 +134,9 @@ export default function ProfileSwitcher(props: Props) {
 									No profiles found
 								</p>
 							</Show>
-						</div>
-					</Portal>
-				</Show>
+						</Popover.Content>
+					</Popover.Portal>
+				</Popover>
 			</Show>
 			<Show when={error()}>
 				<span role="alert" class="ml-2 text-xs text-error">

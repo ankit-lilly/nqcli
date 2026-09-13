@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	mergeGraphElements,
+	graphTopologyKey,
 	removeGraphElement,
 	toGraphElements,
 	type GraphElement,
@@ -9,6 +10,21 @@ import {
 const node = (id: string): GraphElement => ({
 	group: "nodes",
 	data: { id, label: "Study" },
+});
+
+test("graphTopologyKey ignores result order and non-topology properties", () => {
+	const edge: GraphElement = {
+		group: "edges",
+		data: { id: "edge", source: "one", target: "two", label: "knows" },
+	};
+	const first = [node("one"), node("two"), edge];
+	const second = [
+		{ ...edge, data: { ...edge.data, weight: 2 } },
+		{ ...node("two"), data: { ...node("two").data, name: "Two" } },
+		node("one"),
+	];
+
+	expect(graphTopologyKey(first)).toBe(graphTopologyKey(second));
 });
 
 test("mergeGraphElements adds and refreshes entities by ID", () => {

@@ -121,8 +121,3 @@ pre code {
 	backdrop-filter: blur(4px);
 	-webkit-backdrop-filter: blur(4px);
 }
-
-.resizing-panels,
-.resizing-panels * {
-	user-select: none !important;
-}

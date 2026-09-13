@@ -39,14 +39,17 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 		() => schemaExplorer.load(),
 		{ initialValue: emptySchema },
 	);
-	const elements = createMemo(() => schemaGraphElements(snapshot()));
+	// `latest` preserves the last value while refetching instead of notifying
+	// the surrounding Suspense boundary on every progress poll.
+	const currentSnapshot = () => snapshot.latest ?? emptySchema;
+	const elements = createMemo(() => schemaGraphElements(currentSnapshot()));
 	const error = () => {
 		if (refreshError()) return refreshError();
 		if (snapshot.error)
 			return snapshot.error instanceof Error
 				? snapshot.error.message
 				: String(snapshot.error);
-		return snapshot().error ?? "";
+		return currentSnapshot().error ?? "";
 	};
 
 	createEffect(() => {
@@ -55,7 +58,7 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 	});
 
 	createEffect(() => {
-		if (snapshot().status !== "running") return;
+		if (currentSnapshot().status !== "running") return;
 		const timer = window.setTimeout(() => void refetch(), 700);
 		onCleanup(() => window.clearTimeout(timer));
 	});
@@ -79,30 +82,31 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 				<div>
 					<div class="text-xs font-semibold">Schema discovery</div>
 					<div class="text-[10px] text-base-content/45">
-						{formatCount(snapshot().totalVertices)} vertices ·{" "}
-						{formatCount(snapshot().totalEdges)} edges
+						{formatCount(currentSnapshot().totalVertices)} vertices ·{" "}
+						{formatCount(currentSnapshot().totalEdges)} edges
 					</div>
 				</div>
-				<Show when={snapshot().status === "running"}>
+				<Show when={currentSnapshot().status === "running"}>
 					<div class="flex items-center gap-2 text-xs text-base-content/55">
 						<span class="loading loading-spinner loading-xs" />
 						<span>
-							{snapshot().phase || "Discovering"}
-							{snapshot().total
-								? ` ${snapshot().completed ?? 0}/${snapshot().total}`
+							{currentSnapshot().phase || "Discovering"}
+							{currentSnapshot().total
+								? ` ${currentSnapshot().completed ?? 0}/${currentSnapshot().total}`
 								: ""}
 						</span>
 					</div>
 				</Show>
 				<div class="flex-1" />
-				<Show when={snapshot().lastUpdate}>
+				<Show when={currentSnapshot().lastUpdate}>
 					<span class="text-[10px] text-base-content/40">
-						Updated {new Date(snapshot().lastUpdate!).toLocaleTimeString()}
+						Updated{" "}
+						{new Date(currentSnapshot().lastUpdate!).toLocaleTimeString()}
 					</span>
 				</Show>
 				<button
 					class="btn btn-xs btn-outline"
-					disabled={refreshing() || snapshot().status === "running"}
+					disabled={refreshing() || currentSnapshot().status === "running"}
 					onClick={() => void refresh()}
 				>
 					<RefreshCw size={13} /> Refresh
@@ -119,13 +123,13 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 			<SplitPane
 				class="flex-1"
 				direction="horizontal"
-				initialSize={320}
+				initialSize={0.24}
 				minSize={240}
 				minSecond={420}
 				storageKey="nq-schema-sidebar-width"
 				first={
 					<SchemaSidebar
-						snapshot={snapshot}
+						snapshot={currentSnapshot}
 						selection={selection}
 						setSelection={setSelection}
 					/>
@@ -135,8 +139,9 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 						elements={elements}
 						selectedElement={selection}
 						setSelectedElement={setSelection}
+						focusSelection
 						emptyMessage={
-							snapshot().status === "running"
+							currentSnapshot().status === "running"
 								? "Discovering graph schema..."
 								: "No schema data is available."
 						}
@@ -232,7 +237,7 @@ function SchemaSidebar(props: {
 					<For each={connections()}>
 						{(connection) => (
 							<button
-								class="w-full px-3 py-1.5 text-left hover:bg-base-200"
+								class={`w-full px-3 py-1.5 text-left hover:bg-base-200 ${props.selection()?.group === "edges" && props.selection()?.data.id === schemaConnectionID(connection) ? "bg-primary/10 text-primary" : ""}`}
 								onClick={() =>
 									props.setSelection({
 										group: "edges",
