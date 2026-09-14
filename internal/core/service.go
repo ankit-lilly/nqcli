@@ -2,7 +2,7 @@ package core
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 )
@@ -45,15 +45,9 @@ func (s *Service) ExecuteQuery(ctx context.Context, query, queryType string, opt
 }
 
 func formatOutput(content string) string {
-	var parsed any
-	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+	formatted := jsontext.Value(content)
+	if err := formatted.Indent(jsontext.WithIndent("  ")); err != nil {
 		return content
 	}
-
-	prettyJSON, err := json.MarshalIndent(parsed, "", "  ")
-	if err != nil {
-		return content
-	}
-
-	return string(prettyJSON)
+	return string(formatted)
 }

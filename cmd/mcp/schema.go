@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ankit-lilly/nqcli/internal/core"
+	"golang.org/x/sync/errgroup"
 )
 
 const staticSchemaJSON = `{
@@ -353,38 +354,77 @@ func buildGraphSchema(ctx context.Context, svc core.QueryService) (string, error
 }
 
 func discoverGraphSchema(ctx context.Context, svc core.QueryService) (*graphSchema, error) {
-	vertexLabels, err := queryStringList(ctx, svc, "g.V().label().dedup()")
-	if err != nil {
-		return nil, fmt.Errorf("discover vertex labels: %w", err)
-	}
-	edgeLabels, err := queryStringList(ctx, svc, "g.E().label().dedup()")
-	if err != nil {
-		return nil, fmt.Errorf("discover edge labels: %w", err)
-	}
-	edgePatterns, err := queryEdgePatterns(ctx, svc)
-	if err != nil {
-		return nil, fmt.Errorf("discover edge patterns: %w", err)
+	var vertexLabels, edgeLabels []string
+	var edgePatterns []map[string]string
+	labels, labelsCtx := errgroup.WithContext(ctx)
+	labels.Go(func() error {
+		var err error
+		vertexLabels, err = queryStringList(labelsCtx, svc, "g.V().label().dedup()")
+		if err != nil {
+			return fmt.Errorf("discover vertex labels: %w", err)
+		}
+		return nil
+	})
+	labels.Go(func() error {
+		var err error
+		edgeLabels, err = queryStringList(labelsCtx, svc, "g.E().label().dedup()")
+		if err != nil {
+			return fmt.Errorf("discover edge labels: %w", err)
+		}
+		return nil
+	})
+	labels.Go(func() error {
+		var err error
+		edgePatterns, err = queryEdgePatterns(labelsCtx, svc)
+		if err != nil {
+			return fmt.Errorf("discover edge patterns: %w", err)
+		}
+		return nil
+	})
+	if err := labels.Wait(); err != nil {
+		return nil, err
 	}
 
 	slices.Sort(vertexLabels)
 	slices.Sort(edgeLabels)
 
-	vertices := make(map[string]labelSchema, len(vertexLabels))
-	for _, label := range vertexLabels {
-		ls, err := discoverLabelSchema(ctx, svc, true, label)
-		if err != nil {
-			return nil, err
+	vertexSchemas := make([]labelSchema, len(vertexLabels))
+	edgeSchemas := make([]labelSchema, len(edgeLabels))
+	details, detailsCtx := errgroup.WithContext(ctx)
+	details.SetLimit(4)
+	for index := range max(len(vertexLabels), len(edgeLabels)) {
+		if index < len(vertexLabels) {
+			label := vertexLabels[index]
+			details.Go(func() error {
+				discovered, err := discoverLabelSchema(detailsCtx, svc, true, label)
+				if err == nil {
+					vertexSchemas[index] = discovered
+				}
+				return err
+			})
 		}
-		vertices[label] = ls
+		if index < len(edgeLabels) {
+			label := edgeLabels[index]
+			details.Go(func() error {
+				discovered, err := discoverLabelSchema(detailsCtx, svc, false, label)
+				if err == nil {
+					edgeSchemas[index] = discovered
+				}
+				return err
+			})
+		}
+	}
+	if err := details.Wait(); err != nil {
+		return nil, err
 	}
 
+	vertices := make(map[string]labelSchema, len(vertexLabels))
+	for index, label := range vertexLabels {
+		vertices[label] = vertexSchemas[index]
+	}
 	edges := make(map[string]labelSchema, len(edgeLabels))
-	for _, label := range edgeLabels {
-		ls, err := discoverLabelSchema(ctx, svc, false, label)
-		if err != nil {
-			return nil, err
-		}
-		edges[label] = ls
+	for index, label := range edgeLabels {
+		edges[label] = edgeSchemas[index]
 	}
 
 	return &graphSchema{
@@ -554,7 +594,7 @@ func queryCount(ctx context.Context, svc core.QueryService, query string) (int64
 }
 
 func executeGremlin(ctx context.Context, svc core.QueryService, query string) (any, error) {
-	result, err := svc.ExecuteQuery(ctx, query, "gremlin", core.QueryOpts{})
+	result, err := svc.ExecuteQuery(ctx, query, "gremlin", core.QueryOpts{SkipFormatting: true, MaxResponseBytes: 8 << 20})
 	if err != nil {
 		return nil, err
 	}

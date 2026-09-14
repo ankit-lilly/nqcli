@@ -1,12 +1,16 @@
 package neptune
 
 import (
+	"bytes"
 	"encoding/json"
 )
 
-func unwrapGraphSON(raw string) (string, bool) {
+func unwrapGraphSON(raw []byte) (string, bool) {
+	if !bytes.Contains(raw, []byte(`"@type"`)) {
+		return "", false
+	}
 	var parsed any
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return "", false
 	}
 
@@ -26,11 +30,10 @@ func unwrapGraphSONValue(value any) (any, bool) {
 	switch v := value.(type) {
 	case []any:
 		changed := false
-		result := make([]any, len(v))
 		for i, item := range v {
-			result[i], changed = unwrapGraphSONValueChanged(item, changed)
+			v[i], changed = unwrapGraphSONValueChanged(item, changed)
 		}
-		return result, changed
+		return v, changed
 	case map[string]any:
 		typeName, hasType := v["@type"].(string)
 		if hasType {
@@ -40,11 +43,10 @@ func unwrapGraphSONValue(value any) (any, bool) {
 		}
 
 		changed := false
-		result := make(map[string]any, len(v))
 		for key, item := range v {
-			result[key], changed = unwrapGraphSONValueChanged(item, changed)
+			v[key], changed = unwrapGraphSONValueChanged(item, changed)
 		}
-		return result, changed
+		return v, changed
 	default:
 		return value, false
 	}

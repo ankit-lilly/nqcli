@@ -8,7 +8,7 @@ ifeq ($(shell uname -s),Darwin)
 DESKTOP_CGO_LDFLAGS = -mmacosx-version-min=26.0
 endif
 
-.PHONY: build fmt fmt-go fmt-ui clean test test-go test-ui testdox tools desktop-deps desktop-dev desktop-build desktop-test desktop-bindings webui-deps webui-build webui-clean explorer-build explorer-clean build-with-explorer
+.PHONY: build fmt fmt-go fmt-ui clean test test-go test-ui bench-go race-go testdox tools desktop-deps desktop-dev desktop-build desktop-test desktop-bindings webui-deps webui-build webui-clean explorer-build explorer-clean build-with-explorer
 
 build: webui-build
 	@$(GO_ENV) CGO_ENABLED=0 go build $(BUILD_FLAGS) -o nq
@@ -28,6 +28,12 @@ test: test-go test-ui desktop-test
 
 test-go:
 	@$(GO_ENV) CGO_ENABLED=0 go test . ./cmd/... ./internal/...
+
+bench-go:
+	@$(GO_ENV) go test -run='^$$' -bench=. -benchmem ./internal/core ./internal/neptune ./internal/desktop ./internal/schema
+
+race-go:
+	@$(GO_ENV) go test -race ./internal/schema/... ./internal/neptune ./internal/desktop ./internal/server
 
 test-ui: webui-deps
 	@cd $(WEBUI_SRC) && $(BUN_ENV) bun run typecheck

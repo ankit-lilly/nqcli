@@ -151,14 +151,14 @@ func (c *Client) executeREST(ctx context.Context, query, queryType string, opts 
 	if err != nil {
 		return core.QueryPayload{}, fmt.Errorf("failed to read response: %w", err)
 	}
-	raw := string(body)
-	content := normalizeRESTPayload(raw)
+	content := normalizeRESTPayload(body)
 
 	if resp.StatusCode != http.StatusOK {
-		return core.QueryPayload{Content: content, Raw: raw}, fmt.Errorf("API returned status code %d: %s", resp.StatusCode, raw)
+		raw := string(body)
+		return core.QueryPayload{Content: content, Raw: raw}, fmt.Errorf("API returned status code %d: %s", resp.StatusCode, responseSnippet(body))
 	}
 
-	return core.QueryPayload{Content: content, Raw: raw}, nil
+	return core.QueryPayload{Content: content, Raw: preservedRaw(body, opts)}, nil
 }
 
 func (c *Client) executeDirectGremlin(ctx context.Context, query string, opts core.QueryOpts) (core.QueryPayload, error) {
@@ -209,71 +209,74 @@ func (c *Client) executeDirectGremlin(ctx context.Context, query string, opts co
 		return core.QueryPayload{}, fmt.Errorf("failed to read direct gremlin response: %w", err)
 	}
 
-	raw := string(body)
-	content := normalizeDirectGremlinPayload(raw, opts)
+	content := normalizeDirectGremlinPayload(body, opts)
 	if resp.StatusCode != http.StatusOK {
-		return core.QueryPayload{Content: content, Raw: raw}, fmt.Errorf("direct Neptune returned status code %d: %s", resp.StatusCode, raw)
+		raw := string(body)
+		return core.QueryPayload{Content: content, Raw: raw}, fmt.Errorf("direct Neptune returned status code %d: %s", resp.StatusCode, responseSnippet(body))
 	}
 
-	return core.QueryPayload{Content: content, Raw: raw}, nil
+	return core.QueryPayload{Content: content, Raw: preservedRaw(body, opts)}, nil
 }
 
-func normalizeRESTPayload(raw string) string {
+func preservedRaw(body []byte, opts core.QueryOpts) string {
+	if !opts.PreserveRaw {
+		return ""
+	}
+	return string(body)
+}
+
+func responseSnippet(body []byte) string {
+	const limit = 2 << 10
+	if len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit]) + "... (truncated)"
+}
+
+func normalizeRESTPayload(raw []byte) string {
 	if unwrapped, ok := unwrapSingleDataEnvelope(raw); ok {
 		return unwrapped
 	}
-	return raw
+	return string(raw)
 }
 
-func normalizeDirectGremlinPayload(raw string, opts core.QueryOpts) string {
+func normalizeDirectGremlinPayload(raw []byte, opts core.QueryOpts) string {
 	if data, ok := unwrapNeptuneResultData(raw); ok {
 		if opts.Serializer == "" {
 			if plain, ok := unwrapGraphSON(data); ok {
 				return plain
 			}
 		}
-		return data
+		return string(data)
 	}
 	return normalizeRESTPayload(raw)
 }
 
-func unwrapNeptuneResultData(raw string) (string, bool) {
+func unwrapNeptuneResultData(raw []byte) ([]byte, bool) {
 	var parsed struct {
 		Result struct {
 			Data json.RawMessage `json:"data"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return "", false
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, false
 	}
-	if len(parsed.Result.Data) == 0 || string(parsed.Result.Data) == "null" {
-		return "", false
+	if len(parsed.Result.Data) == 0 || bytes.Equal(parsed.Result.Data, []byte("null")) {
+		return nil, false
 	}
-	return string(parsed.Result.Data), true
+	return parsed.Result.Data, true
 }
 
-func unwrapSingleDataEnvelope(raw string) (string, bool) {
-	var parsed any
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+func unwrapSingleDataEnvelope(raw []byte) (string, bool) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &envelope); err != nil || len(envelope) != 1 {
 		return "", false
 	}
-
-	obj, ok := parsed.(map[string]any)
-	if !ok || len(obj) != 1 {
+	data, ok := envelope["data"]
+	if !ok || len(data) == 0 || bytes.Equal(data, []byte("null")) {
 		return "", false
 	}
-
-	data, ok := obj["data"]
-	if !ok || data == nil {
-		return "", false
-	}
-
-	content, err := json.Marshal(data)
-	if err != nil {
-		return "", false
-	}
-
-	return string(content), true
+	return string(data), true
 }
 
 func regionFromURL(endpoint string) (string, error) {

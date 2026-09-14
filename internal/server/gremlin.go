@@ -1,10 +1,10 @@
 package server
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"uuid"
 
 	"github.com/ankit-lilly/nqcli/internal/core"
 )
@@ -21,9 +21,7 @@ type queryErrorResponse struct {
 }
 
 func newRequestID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return uuid.New().String()
 }
 
 func (s *Server) handleGremlinQuery() http.HandlerFunc {

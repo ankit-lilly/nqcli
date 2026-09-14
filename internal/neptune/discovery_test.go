@@ -30,7 +30,6 @@ func TestNeptuneHTTPSURL(t *testing.T) {
 			want:     "https://example.cluster.us-east-1.neptune.amazonaws.com:9999",
 		},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

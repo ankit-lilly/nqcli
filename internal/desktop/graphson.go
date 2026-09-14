@@ -3,6 +3,7 @@ package desktop
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -16,27 +17,31 @@ func ParseGraphSON(raw string) ([]GraphElement, error) {
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
-	seen := make(map[string]bool)
-	return extractElements(parsed, seen)
+	collector := graphCollector{seen: make(map[string]struct{})}
+	if err := collector.collect(parsed); err != nil {
+		return nil, err
+	}
+	return collector.elements, nil
 }
 
-func extractElements(data any, seen map[string]bool) ([]GraphElement, error) {
-	var elements []GraphElement
+type graphCollector struct {
+	elements []GraphElement
+	seen     map[string]struct{}
+}
 
+func (c *graphCollector) collect(data any) error {
 	switch v := data.(type) {
 	case []any:
 		for _, item := range v {
-			elems, err := extractElements(item, seen)
-			if err != nil {
-				return nil, err
+			if err := c.collect(item); err != nil {
+				return err
 			}
-			elements = append(elements, elems...)
 		}
 
 	case map[string]any:
 		if elem, ok := tryParseOpenCypherEntity(v); ok {
-			elements = appendUnique(elements, elem, seen)
-			return elements, nil
+			c.appendUnique(elem)
+			return nil
 		}
 
 		typeName, _ := v["@type"].(string)
@@ -46,75 +51,67 @@ func extractElements(data any, seen map[string]bool) ([]GraphElement, error) {
 		case "g:Vertex":
 			elem, err := parseVertex(value)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			elements = appendUnique(elements, elem, seen)
+			c.appendUnique(elem)
 
 		case "g:Edge":
 			elem, err := parseEdge(value)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			elements = appendUnique(elements, elem, seen)
+			c.appendUnique(elem)
 
 		case "g:List":
 			if list, ok := value.([]any); ok {
-				elems, err := extractElements(list, seen)
-				if err != nil {
-					return nil, err
+				if err := c.collect(list); err != nil {
+					return err
 				}
-				elements = append(elements, elems...)
 			}
 
 		case "g:Map":
 			if mapArr, ok := value.([]any); ok {
 				for i := 1; i < len(mapArr); i += 2 {
-					elems, err := extractElements(mapArr[i], seen)
-					if err != nil {
-						return nil, err
+					if err := c.collect(mapArr[i]); err != nil {
+						return err
 					}
-					elements = append(elements, elems...)
 				}
 			}
 
 		case "g:Path":
 			if pathMap, ok := value.(map[string]any); ok {
 				if objects, ok := pathMap["objects"]; ok {
-					elems, err := extractElements(objects, seen)
-					if err != nil {
-						return nil, err
+					if err := c.collect(objects); err != nil {
+						return err
 					}
-					elements = append(elements, elems...)
 				}
 			}
 
 		default:
 			if elem, ok := tryParseUntypedEdge(v); ok {
-				elements = appendUnique(elements, elem, seen)
-			} else if elems, ok := tryParseUntypedPath(v, seen); ok {
-				elements = append(elements, elems...)
-			} else if elem, ok := tryParseUntypedVertex(v); ok {
-				elements = appendUnique(elements, elem, seen)
-			} else if dataVal, ok := v["data"]; ok {
-				elems, err := extractElements(dataVal, seen)
-				if err != nil {
-					return nil, err
+				c.appendUnique(elem)
+			} else if objects, ok := untypedPathObjects(v); ok {
+				if err := c.collect(objects); err != nil {
+					return err
 				}
-				elements = append(elements, elems...)
+			} else if elem, ok := tryParseUntypedVertex(v); ok {
+				c.appendUnique(elem)
+			} else if dataVal, ok := v["data"]; ok {
+				if err := c.collect(dataVal); err != nil {
+					return err
+				}
 			} else {
 				// Recurse into map values for project()/elementMap() results
 				for _, val := range v {
-					elems, err := extractElements(val, seen)
-					if err != nil {
-						return nil, err
+					if err := c.collect(val); err != nil {
+						return err
 					}
-					elements = append(elements, elems...)
 				}
 			}
 		}
 	}
 
-	return elements, nil
+	return nil
 }
 
 func tryParseOpenCypherEntity(m map[string]any) (GraphElement, bool) {
@@ -132,9 +129,7 @@ func tryParseOpenCypherEntity(m map[string]any) (GraphElement, bool) {
 		}
 		data := map[string]any{"id": fmt.Sprintf("%v", id), "label": label}
 		if properties, ok := m["~properties"].(map[string]any); ok {
-			for key, value := range properties {
-				data[key] = value
-			}
+			maps.Copy(data, properties)
 		}
 		return GraphElement{Group: "nodes", Data: data}, true
 
@@ -152,9 +147,7 @@ func tryParseOpenCypherEntity(m map[string]any) (GraphElement, bool) {
 			"label":  fmt.Sprintf("%v", m["~type"]),
 		}
 		if properties, ok := m["~properties"].(map[string]any); ok {
-			for key, value := range properties {
-				data[key] = value
-			}
+			maps.Copy(data, properties)
 		}
 		return GraphElement{Group: "edges", Data: data}, true
 	}
@@ -178,7 +171,7 @@ func tryParseUntypedEdge(m map[string]any) (GraphElement, bool) {
 	return GraphElement{Group: "edges", Data: data}, true
 }
 
-func tryParseUntypedPath(m map[string]any, seen map[string]bool) ([]GraphElement, bool) {
+func untypedPathObjects(m map[string]any) ([]any, bool) {
 	objects, ok := m["objects"]
 	if !ok {
 		return nil, false
@@ -187,11 +180,7 @@ func tryParseUntypedPath(m map[string]any, seen map[string]bool) ([]GraphElement
 	if !ok {
 		return nil, false
 	}
-	elems, err := extractElements(arr, seen)
-	if err != nil {
-		return nil, false
-	}
-	return elems, true
+	return arr, true
 }
 
 func tryParseUntypedVertex(m map[string]any) (GraphElement, bool) {
@@ -326,13 +315,17 @@ func unwrapTypedValue(val any) any {
 	return val
 }
 
-func appendUnique(dst []GraphElement, elem GraphElement, seen map[string]bool) []GraphElement {
+func (c *graphCollector) appendUnique(elem GraphElement) {
 	id, _ := elem.Data["id"].(string)
-	if id == "" || seen[id] {
-		return dst
+	key := elem.Group + "\x00" + id
+	if id == "" {
+		return
 	}
-	seen[id] = true
-	return append(dst, elem)
+	if _, exists := c.seen[key]; exists {
+		return
+	}
+	c.seen[key] = struct{}{}
+	c.elements = append(c.elements, elem)
 }
 
 func parseValueMap(raw string) (map[string]any, error) {

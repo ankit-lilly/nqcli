@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,6 +35,44 @@ func (s *spyService) ExecuteQuery(ctx context.Context, query, queryType string, 
 		return s.result, s.err
 	}
 	return core.QueryResult{Content: `{"ok":true}`, Processed: "processed", Raw: "raw"}, nil
+}
+
+func TestExplorerServesIndexWithoutRedirect(t *testing.T) {
+	t.Parallel()
+	srv := New(&spyService{}, log.NewWithOptions(io.Discard, log.Options{}))
+
+	for _, path := range []string{"/explorer/", "/explorer/schema/view"} {
+		recorder := httptest.NewRecorder()
+		srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
+		}
+		if location := recorder.Header().Get("Location"); location != "" {
+			t.Errorf("GET %s redirected to %q", path, location)
+		}
+		if cache := recorder.Header().Get("Cache-Control"); cache != "no-cache" {
+			t.Errorf("GET %s Cache-Control = %q, want no-cache", path, cache)
+		}
+	}
+}
+
+func TestExplorerAssetsAreImmutable(t *testing.T) {
+	t.Parallel()
+	srv := New(&spyService{}, log.NewWithOptions(io.Discard, log.Options{}))
+	assets, err := fs.Glob(explorerDistFS, "webui_dist/assets/*")
+	if err != nil || len(assets) == 0 {
+		t.Fatalf("find embedded asset: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	path := "/explorer/" + strings.TrimPrefix(assets[0], "webui_dist/")
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "public, max-age=31536000, immutable" {
+		t.Fatalf("Cache-Control = %q", cache)
+	}
 }
 
 func TestQueriesEndpointInvokesService(t *testing.T) {

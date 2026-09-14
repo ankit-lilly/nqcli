@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ankit-lilly/nqcli/internal/core"
@@ -23,6 +24,18 @@ func (s *spyQueryService) ExecuteQuery(ctx context.Context, query, queryType str
 	s.lastQueryType = queryType
 	s.lastOpts = opts
 	return core.QueryResult{Content: "{}", Processed: "{}", Raw: "{}"}, nil
+}
+
+func TestReadQueryAcceptsLongInlineTraversal(t *testing.T) {
+	t.Parallel()
+	query := "g.V().hasLabel(" + strings.Repeat(`"Study",`, 1000) + `"Study")`
+	got, err := readQuery([]string{query})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != query {
+		t.Fatal("long inline traversal changed")
+	}
 }
 
 func TestRootCommandInlineQuery(t *testing.T) {

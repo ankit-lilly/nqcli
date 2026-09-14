@@ -2,6 +2,7 @@ package neptune
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,14 +21,13 @@ func TestExecuteREST_ExtractsDataEnvelope(t *testing.T) {
 
 	const rawResponse = `{"data":[{"id":"1","label":"Study"}]}`
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(rawResponse))
 	}))
-	defer server.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: server.URL},
+		&config.Config{URL: testEndpoint("rest")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -36,8 +36,9 @@ func TestExecuteREST_ExtractsDataEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{"rest.example": server})
 
-	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
+	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{PreserveRaw: true})
 	if err != nil {
 		t.Fatalf("executeREST: %v", err)
 	}
@@ -47,24 +48,27 @@ func TestExecuteREST_ExtractsDataEnvelope(t *testing.T) {
 	if result.Raw != rawResponse {
 		t.Fatalf("expected raw response to be preserved, got %q", result.Raw)
 	}
+
+	result, err = client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
+	if err != nil {
+		t.Fatalf("executeREST without raw response: %v", err)
+	}
+	if result.Raw != "" {
+		t.Fatalf("raw response retained without PreserveRaw: %q", result.Raw)
+	}
 }
 
 func TestExecuteREST_SetsAcceptHeaderWhenSerializerProvided(t *testing.T) {
 	t.Parallel()
 
 	var receivedAccept string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAccept = r.Header.Get("Accept")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
-	defer server.Close()
-
-	// Force REST backend by using an execute-api hostname workaround:
-	// httptest uses localhost, so detectBackend won't pick REST.
-	// We test executeREST directly instead.
 	client, err := NewClient(
-		&config.Config{URL: server.URL},
+		&config.Config{URL: testEndpoint("rest")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -73,6 +77,7 @@ func TestExecuteREST_SetsAcceptHeaderWhenSerializerProvided(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{"rest.example": server})
 
 	opts := core.QueryOpts{Serializer: "application/vnd.gremlin-v2.0+json"}
 	_, err = client.ExecuteQuery(context.Background(), "g.V()", "gremlin", opts)
@@ -88,15 +93,14 @@ func TestExecuteREST_NoAcceptHeaderWhenSerializerEmpty(t *testing.T) {
 	t.Parallel()
 
 	var receivedAccept string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAccept = r.Header.Get("Accept")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
-	defer server.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: server.URL},
+		&config.Config{URL: testEndpoint("rest")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -105,6 +109,7 @@ func TestExecuteREST_NoAcceptHeaderWhenSerializerEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{"rest.example": server})
 
 	_, err = client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
 	if err != nil {
@@ -120,7 +125,7 @@ func TestExecuteQuery_PrefersDirectGremlin(t *testing.T) {
 
 	var directCalled bool
 	var receivedAccept string
-	directServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	directServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		directCalled = true
 		receivedAccept = r.Header.Get("Accept")
 		if r.URL.Path != "/gremlin" {
@@ -129,15 +134,13 @@ func TestExecuteQuery_PrefersDirectGremlin(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"requestId":"1","status":{"code":200},"result":{"data":{"@type":"g:List","@value":[]}}}`))
 	}))
-	defer directServer.Close()
 
-	restServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	restServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("REST fallback should not be called when direct succeeds")
 	}))
-	defer restServer.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: restServer.URL, DirectURL: directServer.URL},
+		&config.Config{URL: testEndpoint("rest"), DirectURL: testEndpoint("direct")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -146,6 +149,10 @@ func TestExecuteQuery_PrefersDirectGremlin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{
+		"direct.example": directServer,
+		"rest.example":   restServer,
+	})
 
 	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
 	if err != nil {
@@ -166,20 +173,18 @@ func TestExecuteQuery_PassesExplicitSerializerToDirectGremlin(t *testing.T) {
 	t.Parallel()
 
 	var receivedAccept string
-	directServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	directServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAccept = r.Header.Get("Accept")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"requestId":"1","status":{"code":200},"result":{"data":{"@type":"g:List","@value":[]}}}`))
 	}))
-	defer directServer.Close()
 
-	restServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	restServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("REST fallback should not be called when direct succeeds")
 	}))
-	defer restServer.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: restServer.URL, DirectURL: directServer.URL},
+		&config.Config{URL: testEndpoint("rest"), DirectURL: testEndpoint("direct")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -188,6 +193,10 @@ func TestExecuteQuery_PassesExplicitSerializerToDirectGremlin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{
+		"direct.example": directServer,
+		"rest.example":   restServer,
+	})
 
 	opts := core.QueryOpts{Serializer: "application/vnd.gremlin-v3.0+json"}
 	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", opts)
@@ -206,22 +215,20 @@ func TestExecuteQuery_FallsBackToRESTWhenDirectGremlinFails(t *testing.T) {
 	t.Parallel()
 
 	var directCalls atomic.Int32
-	directServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	directServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		directCalls.Add(1)
 		http.Error(w, "direct unavailable", http.StatusBadGateway)
 	}))
-	defer directServer.Close()
 
 	var restCalls atomic.Int32
-	restServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	restServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		restCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":{"@type":"g:List","@value":[]}}`))
 	}))
-	defer restServer.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: restServer.URL, DirectURL: directServer.URL},
+		&config.Config{URL: testEndpoint("rest"), DirectURL: testEndpoint("direct")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -230,6 +237,10 @@ func TestExecuteQuery_FallsBackToRESTWhenDirectGremlinFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{
+		"direct.example": directServer,
+		"rest.example":   restServer,
+	})
 
 	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
 	if err != nil {
@@ -260,22 +271,20 @@ func TestExecuteQuery_DoesNotFallbackAfterDirectGremlinSucceeds(t *testing.T) {
 	t.Parallel()
 
 	var directCalls atomic.Int32
-	directServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	directServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if directCalls.Add(1) == 1 {
 			_, _ = w.Write([]byte(`{"result":{"data":{"@type":"g:List","@value":[]}}}`))
 			return
 		}
 		http.Error(w, "invalid traversal", http.StatusBadRequest)
 	}))
-	defer directServer.Close()
 
-	restServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	restServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("REST fallback should not run after the direct backend is selected")
 	}))
-	defer restServer.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: restServer.URL, DirectURL: directServer.URL},
+		&config.Config{URL: testEndpoint("rest"), DirectURL: testEndpoint("direct")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -284,6 +293,10 @@ func TestExecuteQuery_DoesNotFallbackAfterDirectGremlinSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{
+		"direct.example": directServer,
+		"rest.example":   restServer,
+	})
 	if _, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{}); err != nil {
 		t.Fatalf("first ExecuteQuery: %v", err)
 	}
@@ -321,19 +334,17 @@ func TestExecuteQuery_ConvertsDirectGraphSONToPlainJSONWhenSerializerEmpty(t *te
 		}
 	}`
 
-	directServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	directServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(graphson))
 	}))
-	defer directServer.Close()
 
-	restServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	restServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("REST fallback should not be called when direct succeeds")
 	}))
-	defer restServer.Close()
 
 	client, err := NewClient(
-		&config.Config{URL: restServer.URL, DirectURL: directServer.URL},
+		&config.Config{URL: testEndpoint("rest"), DirectURL: testEndpoint("direct")},
 		aws.Config{
 			Region:      "us-east-1",
 			Credentials: credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
@@ -342,6 +353,10 @@ func TestExecuteQuery_ConvertsDirectGraphSONToPlainJSONWhenSerializerEmpty(t *te
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	routeTestServers(client, map[string]*httptest.Server{
+		"direct.example": directServer,
+		"rest.example":   restServer,
+	})
 
 	result, err := client.ExecuteQuery(context.Background(), "g.V()", "gremlin", core.QueryOpts{})
 	if err != nil {
@@ -368,4 +383,24 @@ func TestReadResponseLimit(t *testing.T) {
 			t.Fatal("response changed")
 		}
 	}
+}
+
+func testEndpoint(name string) string {
+	return "http://" + name + ".example"
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func routeTestServers(client *Client, servers map[string]*httptest.Server) {
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		server, ok := servers[request.URL.Hostname()]
+		if !ok {
+			return nil, fmt.Errorf("no test server for %q", request.URL.Hostname())
+		}
+		return server.Client().Transport.RoundTrip(request)
+	})
 }

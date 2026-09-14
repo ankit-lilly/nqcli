@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ankit-lilly/nqcli/internal/awsprofile"
 	"github.com/ankit-lilly/nqcli/internal/core"
 	graphschema "github.com/ankit-lilly/nqcli/internal/schema"
+	"github.com/ankit-lilly/nqcli/internal/schema/filecache"
 )
 
 type ServiceFactory func(ctx context.Context, profile string) (core.QueryService, error)
@@ -67,7 +69,7 @@ func NewDesktopService(svc core.QueryService, profile string, factory ServiceFac
 	ctx, cancel := context.WithCancel(context.Background())
 	return &DesktopService{
 		svc: svc, profile: profile, factory: factory, ctx: ctx, cancel: cancel,
-		lifecycle: context.Background(), schema: graphschema.NewService(nil),
+		lifecycle: context.Background(), schema: graphschema.NewService(nil, graphschema.WithStore(filecache.Default())),
 	}
 }
 
@@ -87,12 +89,18 @@ func (d *DesktopService) GetProfile() ProfileInfo {
 	return ProfileInfo{
 		Profile:  d.profile,
 		Env:      envFromProfile(d.profile),
-		Profiles: AvailableProfiles(),
+		Profiles: awsprofile.Available(),
 	}
 }
 
 //wails:ignore
-func (d *DesktopService) Shutdown() error { d.mu.Lock(); defer d.mu.Unlock(); d.cancel(); return nil }
+func (d *DesktopService) Shutdown() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.cancel()
+	d.schema.Close()
+	return nil
+}
 
 // Cancel currently active requests without discarding the application lifecycle context.
 func (d *DesktopService) CancelQueries() {

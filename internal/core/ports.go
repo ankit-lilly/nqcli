@@ -5,6 +5,7 @@ import "context"
 type QueryOpts struct {
 	Serializer       string
 	SkipFormatting   bool
+	PreserveRaw      bool
 	MaxResponseBytes int64
 }
 

@@ -22,44 +22,23 @@ func (s *Server) explorerRoutes() {
 	if err != nil {
 		panic(err)
 	}
+	files := http.StripPrefix("/explorer/", http.FileServer(http.FS(distFS)))
 
 	s.mux.HandleFunc("/explorer/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/explorer/")
-		if path == "" {
-			path = "index.html"
-		}
-
-		f, err := distFS.(fs.ReadFileFS).ReadFile(path)
-		if err != nil {
-			// SPA fallback: serve index.html for unknown paths
-			f, err = distFS.(fs.ReadFileFS).ReadFile("index.html")
-			if err != nil {
-				http.NotFound(w, r)
-				return
+		if path != "" {
+			if _, err := fs.Stat(distFS, path); err != nil {
+				path = ""
 			}
-			path = "index.html"
 		}
-
-		ctype := "application/octet-stream"
-		switch {
-		case strings.HasSuffix(path, ".html"):
-			ctype = "text/html; charset=utf-8"
-		case strings.HasSuffix(path, ".js"):
-			ctype = "application/javascript"
-		case strings.HasSuffix(path, ".css"):
-			ctype = "text/css"
-		case strings.HasSuffix(path, ".json"):
-			ctype = "application/json"
-		case strings.HasSuffix(path, ".svg"):
-			ctype = "image/svg+xml"
-		case strings.HasSuffix(path, ".png"):
-			ctype = "image/png"
-		case strings.HasSuffix(path, ".ico"):
-			ctype = "image/x-icon"
+		if strings.HasPrefix(path, "assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
-
-		w.Header().Set("Content-Type", ctype)
-		w.Write(f)
+		request := r.Clone(r.Context())
+		request.URL.Path = "/explorer/" + path
+		files.ServeHTTP(w, request)
 	})
 
 	s.mux.HandleFunc("/defaultConnection", s.handleDefaultConnection())

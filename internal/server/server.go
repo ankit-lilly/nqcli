@@ -13,6 +13,7 @@ import (
 
 	"github.com/ankit-lilly/nqcli/internal/core"
 	graphschema "github.com/ankit-lilly/nqcli/internal/schema"
+	"github.com/ankit-lilly/nqcli/internal/schema/filecache"
 	"github.com/charmbracelet/log"
 )
 
@@ -72,7 +73,7 @@ func NewWithOptions(service core.QueryService, logger *log.Logger, opts Options)
 		logger:      logger,
 		mux:         http.NewServeMux(),
 	}
-	s.schema = graphschema.NewService(logger)
+	s.schema = graphschema.NewService(logger, graphschema.WithStore(filecache.Default()))
 
 	s.routes()
 
@@ -110,6 +111,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Start begins listening on addr and blocks until ctx is cancelled, at which
 // point the server gracefully shuts down.
 func (s *Server) Start(ctx context.Context, addr string) error {
+	defer s.schema.Close()
 	if addr == "" {
 		addr = defaultAddr
 	}
@@ -182,7 +184,7 @@ func (s *Server) handleExecuteQuery() http.HandlerFunc {
 			queryType = defaultQueryType
 		}
 
-		opts := core.QueryOpts{Serializer: req.Serializer}
+		opts := core.QueryOpts{Serializer: req.Serializer, PreserveRaw: true}
 		result, err := s.queryService().ExecuteQuery(r.Context(), req.Query, queryType, opts)
 
 		resp := queryResponse{

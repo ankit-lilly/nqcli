@@ -10,3 +10,7 @@ test.*
 *.groovy
 nq
 cmd/root_test.go
+**/node_modules
+webui/dist
+desktop/frontend/dist
+internal/server/webui_dist

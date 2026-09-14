@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 
 	mcpcmd "github.com/ankit-lilly/nqcli/cmd/mcp"
 	servercmd "github.com/ankit-lilly/nqcli/cmd/server"
@@ -72,7 +74,7 @@ func readQuery(args []string) (query string, err error) {
 				return "", fmt.Errorf("failed to read query file: %w", readErr)
 			}
 			return string(content), nil
-		case os.IsNotExist(statErr):
+		case os.IsNotExist(statErr), errors.Is(statErr, syscall.ENAMETOOLONG):
 			return input, nil
 		default:
 			return "", fmt.Errorf("failed to stat %q: %w", input, statErr)

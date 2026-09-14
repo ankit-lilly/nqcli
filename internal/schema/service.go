@@ -5,6 +5,7 @@ package schema
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -26,7 +27,7 @@ const (
 	StatusFailed  Status = "failed"
 
 	sampleSize           = 500
-	connectionSampleSize = 5000
+	connectionSampleSize = 500
 	queryConcurrency     = 4
 	maxResponseBytes     = 8 << 20
 	refreshTimeout       = 5 * time.Minute
@@ -82,7 +83,23 @@ type Event struct {
 }
 
 type Logger interface {
-	Warn(msg interface{}, keyvals ...interface{})
+	Warn(msg any, keyvals ...any)
+}
+
+var ErrCacheMiss = errors.New("schema cache miss")
+
+// Store persists completed snapshots without coupling discovery to a storage transport.
+type Store interface {
+	Load(key string) (Snapshot, error)
+	Save(key string, snapshot Snapshot) error
+}
+
+type Option func(*Service)
+
+func WithStore(store Store) Option {
+	return func(service *Service) {
+		service.store = store
+	}
 }
 
 // Service coordinates one cached schema snapshot per connection key.
@@ -91,16 +108,42 @@ type Service struct {
 	snapshots map[string]Snapshot
 	running   map[string]chan struct{}
 	subs      map[chan Event]struct{}
+	loaded    map[string]bool
 	logger    Logger
+	store     Store
+	ctx       context.Context
+	cancel    context.CancelFunc
+	workers   sync.WaitGroup
+	closed    bool
 }
 
-func NewService(logger Logger) *Service {
-	return &Service{
+func NewService(logger Logger, options ...Option) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
+	service := &Service{
 		snapshots: make(map[string]Snapshot),
 		running:   make(map[string]chan struct{}),
 		subs:      make(map[chan Event]struct{}),
+		loaded:    make(map[string]bool),
 		logger:    logger,
+		ctx:       ctx,
+		cancel:    cancel,
 	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
+}
+
+func (s *Service) Close() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	s.cancel()
+	s.mu.Unlock()
+	s.workers.Wait()
 }
 
 func EmptySnapshot(status Status) Snapshot {
@@ -123,13 +166,18 @@ func (s *Service) IsStale(snapshot Snapshot) bool {
 
 // Revalidate starts a refresh when data is absent, failed, stale, or forced.
 // It returns immediately and preserves any cached schema while work continues.
-func (s *Service) Revalidate(ctx context.Context, key string, query core.QueryService, force bool) Snapshot {
+func (s *Service) Revalidate(_ context.Context, key string, query core.QueryService, force bool) Snapshot {
+	s.loadCached(key)
 	existing := s.Get(key)
 	if !force && existing.Status != StatusEmpty && existing.Status != StatusFailed && !s.IsStale(existing) {
 		return existing
 	}
 
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return existing
+	}
 	if _, running := s.running[key]; running {
 		snapshot := s.snapshots[key]
 		s.mu.Unlock()
@@ -145,11 +193,32 @@ func (s *Service) Revalidate(ctx context.Context, key string, query core.QuerySe
 	running.LastRefreshStarted = &now
 	s.snapshots[key] = running
 	s.running[key] = make(chan struct{})
+	s.publishLocked(Event{Type: "schema.sync.started", Key: key, Status: StatusRunning, Phase: "starting"})
+	s.workers.Go(func() {
+		s.runRefresh(key, query)
+	})
 	s.mu.Unlock()
-
-	s.publish(Event{Type: "schema.sync.started", Key: key, Status: StatusRunning, Phase: "starting"})
-	go s.runRefresh(ctx, key, query)
 	return running
+}
+
+func (s *Service) loadCached(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loaded[key] {
+		return
+	}
+	s.loaded[key] = true
+	if s.store == nil {
+		return
+	}
+	snapshot, err := s.store.Load(key)
+	if err == nil {
+		s.snapshots[key] = snapshot
+		return
+	}
+	if !errors.Is(err, ErrCacheMiss) && s.logger != nil {
+		s.logger.Warn("failed to load schema cache", "key", key, "error", err)
+	}
 }
 
 func (s *Service) Wait(ctx context.Context, key string) bool {
@@ -182,8 +251,8 @@ func (s *Service) Subscribe() (<-chan Event, func()) {
 	}
 }
 
-func (s *Service) runRefresh(parent context.Context, key string, query core.QueryService) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), refreshTimeout)
+func (s *Service) runRefresh(key string, query core.QueryService) {
+	ctx, cancel := context.WithTimeout(s.ctx, refreshTimeout)
 	defer cancel()
 	discovery := discovery{query: query, onProgress: func(phase string, completed, total int) {
 		s.updateProgress(key, phase, completed, total)
@@ -191,21 +260,18 @@ func (s *Service) runRefresh(parent context.Context, key string, query core.Quer
 	snapshot, err := discovery.discover(ctx)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	done := s.running[key]
-	delete(s.running, key)
-	if done != nil {
-		close(done)
-	}
 	if err != nil {
 		existing := s.snapshots[key]
 		existing.Status = StatusFailed
 		existing.Error = err.Error()
 		s.snapshots[key] = existing
 		s.publishLocked(Event{Type: "schema.sync.failed", Key: key, Status: StatusFailed, Error: err.Error()})
+		s.mu.Unlock()
 		if s.logger != nil {
 			s.logger.Warn("schema sync failed", "key", key, "error", err)
 		}
+		s.finishRefresh(key, done)
 		return
 	}
 	now := time.Now()
@@ -214,6 +280,26 @@ func (s *Service) runRefresh(parent context.Context, key string, query core.Quer
 	snapshot.LastUpdate = &now
 	s.snapshots[key] = snapshot
 	s.publishLocked(Event{Type: "schema.sync.completed", Key: key, Status: StatusReady, Phase: "complete"})
+	s.mu.Unlock()
+	if s.store != nil {
+		if err := s.store.Save(key, snapshot); err != nil && s.logger != nil {
+			s.logger.Warn("failed to save schema cache", "key", key, "error", err)
+		}
+	}
+	s.finishRefresh(key, done)
+}
+
+func (s *Service) finishRefresh(key string, done chan struct{}) {
+	if done == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running[key] != done {
+		return
+	}
+	delete(s.running, key)
+	close(done)
 }
 
 func (s *Service) updateProgress(key, phase string, completed, total int) {
@@ -250,53 +336,78 @@ type discovery struct {
 
 func (d discovery) discover(ctx context.Context) (Snapshot, error) {
 	d.progress("labels", 0, 2)
-	vertexCounts, err := d.groupCounts(ctx, "g.V().label().groupCount()")
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("discover vertex labels: %w", err)
+	var vertexCounts, edgeCounts map[string]int
+	labels, labelsCtx := errgroup.WithContext(ctx)
+	var labelsCompleted atomic.Int64
+	labels.Go(func() error {
+		counts, err := d.groupCounts(labelsCtx, "g.V().label().groupCount()")
+		if err != nil {
+			return fmt.Errorf("discover vertex labels: %w", err)
+		}
+		vertexCounts = counts
+		d.progress("labels", int(labelsCompleted.Add(1)), 2)
+		return nil
+	})
+	labels.Go(func() error {
+		counts, err := d.groupCounts(labelsCtx, "g.E().label().groupCount()")
+		if err != nil {
+			return fmt.Errorf("discover edge labels: %w", err)
+		}
+		edgeCounts = counts
+		d.progress("labels", int(labelsCompleted.Add(1)), 2)
+		return nil
+	})
+	if err := labels.Wait(); err != nil {
+		return Snapshot{}, err
 	}
-	d.progress("labels", 1, 2)
-	edgeCounts, err := d.groupCounts(ctx, "g.E().label().groupCount()")
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("discover edge labels: %w", err)
-	}
-	d.progress("labels", 2, 2)
 
 	vertexLabels, edgeLabels := sortedKeys(vertexCounts), sortedKeys(edgeCounts)
-	d.progress("vertex-properties", 0, len(vertexLabels))
-	vertices, err := discoverByLabel(ctx, vertexLabels, func(ctx context.Context, label string) (Vertex, error) {
-		attributes, err := d.attributes(ctx, "V", label)
-		if err != nil {
-			return Vertex{}, fmt.Errorf("discover vertex properties for %q: %w", label, err)
+	vertices := make([]Vertex, len(vertexLabels))
+	edges := make([]Edge, len(edgeLabels))
+	connectionsByLabel := make([][]EdgeConnection, len(edgeLabels))
+	totalDetails := len(vertexLabels) + 2*len(edgeLabels)
+	d.progress("details", 0, totalDetails)
+	var detailsCompleted atomic.Int64
+	details, detailsCtx := errgroup.WithContext(ctx)
+	details.SetLimit(queryConcurrency)
+	for index := range max(len(vertexLabels), len(edgeLabels)) {
+		if index < len(vertexLabels) {
+			label := vertexLabels[index]
+			details.Go(func() error {
+				attributes, err := d.attributes(detailsCtx, "V", label)
+				if err != nil {
+					return fmt.Errorf("discover vertex properties for %q: %w", label, err)
+				}
+				total := vertexCounts[label]
+				vertices[index] = Vertex{Type: label, Attributes: attributes, Total: &total}
+				d.progress("details", int(detailsCompleted.Add(1)), totalDetails)
+				return nil
+			})
 		}
-		total := vertexCounts[label]
-		return Vertex{Type: label, Attributes: attributes, Total: &total}, nil
-	}, func(completed int) { d.progress("vertex-properties", completed, len(vertexLabels)) })
-	if err != nil {
-		return Snapshot{}, err
+		if index < len(edgeLabels) {
+			label := edgeLabels[index]
+			details.Go(func() error {
+				attributes, err := d.attributes(detailsCtx, "E", label)
+				if err != nil {
+					return fmt.Errorf("discover edge properties for %q: %w", label, err)
+				}
+				total := edgeCounts[label]
+				edges[index] = Edge{Type: label, Attributes: attributes, Total: &total}
+				d.progress("details", int(detailsCompleted.Add(1)), totalDetails)
+				return nil
+			})
+			details.Go(func() error {
+				connections, err := d.edgeConnections(detailsCtx, label)
+				if err != nil {
+					return fmt.Errorf("discover edge connections for %q: %w", label, err)
+				}
+				connectionsByLabel[index] = connections
+				d.progress("details", int(detailsCompleted.Add(1)), totalDetails)
+				return nil
+			})
+		}
 	}
-
-	d.progress("edge-properties", 0, len(edgeLabels))
-	edges, err := discoverByLabel(ctx, edgeLabels, func(ctx context.Context, label string) (Edge, error) {
-		attributes, err := d.attributes(ctx, "E", label)
-		if err != nil {
-			return Edge{}, fmt.Errorf("discover edge properties for %q: %w", label, err)
-		}
-		total := edgeCounts[label]
-		return Edge{Type: label, Attributes: attributes, Total: &total}, nil
-	}, func(completed int) { d.progress("edge-properties", completed, len(edgeLabels)) })
-	if err != nil {
-		return Snapshot{}, err
-	}
-
-	d.progress("edge-connections", 0, len(edgeLabels))
-	connectionsByLabel, err := discoverByLabel(ctx, edgeLabels, func(ctx context.Context, label string) ([]EdgeConnection, error) {
-		connections, err := d.edgeConnections(ctx, label)
-		if err != nil {
-			return nil, fmt.Errorf("discover edge connections for %q: %w", label, err)
-		}
-		return connections, nil
-	}, func(completed int) { d.progress("edge-connections", completed, len(edgeLabels)) })
-	if err != nil {
+	if err := details.Wait(); err != nil {
 		return Snapshot{}, err
 	}
 
@@ -313,25 +424,6 @@ func (d discovery) discover(ctx context.Context) (Snapshot, error) {
 	}
 	totalVertices, totalEdges := sumCounts(vertexCounts), sumCounts(edgeCounts)
 	return Snapshot{TotalVertices: &totalVertices, Vertices: vertices, TotalEdges: &totalEdges, Edges: edges, EdgeConnections: connections}, nil
-}
-
-func discoverByLabel[T any](ctx context.Context, labels []string, discover func(context.Context, string) (T, error), onProgress func(int)) ([]T, error) {
-	results := make([]T, len(labels))
-	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(queryConcurrency)
-	var completed atomic.Int64
-	for i, label := range labels {
-		group.Go(func() error {
-			result, err := discover(groupCtx, label)
-			if err != nil {
-				return err
-			}
-			results[i] = result
-			onProgress(int(completed.Add(1)))
-			return nil
-		})
-	}
-	return results, group.Wait()
 }
 
 func (d discovery) progress(phase string, completed, total int) {
