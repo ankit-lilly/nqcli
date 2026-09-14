@@ -1,9 +1,16 @@
 import { DesktopService } from "../../bindings/github.com/ankit-lilly/nqcli/internal/desktop";
 import type * as WailsSchema from "../../bindings/github.com/ankit-lilly/nqcli/internal/schema/models";
+// @ts-expect-error Wails injects this virtual module into the webview.
+import { Events } from "/wails/runtime.js";
 import type { SchemaPort } from "../application/schema-explorer";
-import type { SchemaSnapshot, SchemaStatus } from "../domain/schema";
+import type {
+	SchemaEvent,
+	SchemaSnapshot,
+	SchemaStatus,
+} from "../domain/schema";
 
 const statuses = new Set<SchemaStatus>(["empty", "running", "ready", "failed"]);
+const schemaEventName = "schema:update";
 
 export class WailsSchemaAdapter implements SchemaPort {
 	async get(options: { refresh?: boolean } = {}): Promise<SchemaSnapshot> {
@@ -32,5 +39,20 @@ export class WailsSchemaAdapter implements SchemaPort {
 			})),
 			edgeConnections: result.edgeConnections ?? [],
 		};
+	}
+
+	subscribe(listener: (event: SchemaEvent) => void): () => void {
+		return Events.On(schemaEventName, (event: { data: WailsSchema.Event }) => {
+			const data = event.data as Partial<SchemaEvent> | null;
+			if (
+				!data ||
+				typeof data.type !== "string" ||
+				typeof data.key !== "string" ||
+				!statuses.has(data.status as SchemaStatus)
+			) {
+				return;
+			}
+			listener(data as SchemaEvent);
+		});
 	}
 }

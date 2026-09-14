@@ -18,6 +18,16 @@ export interface EdgeConnection {
     "targetVertexType": string;
 }
 
+export interface Event {
+    "type": string;
+    "key": string;
+    "status": Status;
+    "phase"?: string;
+    "completed"?: number;
+    "total"?: number;
+    "error"?: string;
+}
+
 export interface Snapshot {
     "totalVertices"?: number | null;
     "vertices": Vertex[] | null;

@@ -1,4 +1,5 @@
 import { CytoscapeSurface } from "@nq/graph-surface";
+import { makePersisted } from "@solid-primitives/storage";
 import cytoscape, { type Core } from "cytoscape";
 import dagre from "cytoscape-dagre";
 import {
@@ -40,6 +41,13 @@ type LayoutState = {
 	zoom: number;
 	pan: { x: number; y: number };
 	layout: string;
+};
+
+type RenderingOptions = {
+	nodeLabels: boolean;
+	edgeLabels: boolean;
+	topologySizing: boolean;
+	edgeCurve: "bezier" | "straight" | "taxi";
 };
 
 const layoutsByResult = new WeakMap<GraphElement[], LayoutState>();
@@ -141,11 +149,17 @@ export default function GraphView(props: Props) {
 	const [fullscreen, setFullscreen] = createSignal(false);
 	const [surfaceReady, setSurfaceReady] = createSignal(false);
 	const [themeKey, setThemeKey] = createSignal(0);
-	const [rendering, setRendering] = createStore({
+	const renderingState = createStore<RenderingOptions>({
 		nodeLabels: true,
-		edgeLabels: false,
+		edgeLabels: true,
 		topologySizing: true,
-		edgeCurve: "bezier" as "bezier" | "straight" | "taxi",
+		edgeCurve: "bezier",
+	});
+	const [rendering, setRendering] = makePersisted<
+		RenderingOptions,
+		typeof renderingState
+	>(renderingState, {
+		name: "nq-graph-rendering",
 	});
 
 	const legend = createMemo(() => {

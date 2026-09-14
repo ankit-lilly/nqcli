@@ -200,6 +200,13 @@ func (d *DesktopService) GetSchema(req SchemaRequest) graphschema.Snapshot {
 	return d.schema.Revalidate(ctx, key, svc, req.Refresh)
 }
 
+// SubscribeSchemaEvents exposes schema progress to desktop transport adapters.
+//
+//wails:ignore
+func (d *DesktopService) SubscribeSchemaEvents() (<-chan graphschema.Event, func()) {
+	return d.schema.Subscribe()
+}
+
 type VertexPropsRequest struct {
 	ID string `json:"id"`
 }

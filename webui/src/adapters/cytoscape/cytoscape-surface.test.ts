@@ -30,7 +30,8 @@ describe("CytoscapeSurfaceAdapter", () => {
 });
 
 describe("shared Cytoscape surface", () => {
-	it("publishes framework-neutral node and double-click events", () => {
+	it("does not publish a single click as part of a double click", () => {
+		vi.useFakeTimers();
 		const onNodeClick = vi.fn();
 		const onNodeDoubleClick = vi.fn();
 		const surface = new CytoscapeSurface({ headless: true } as never, {
@@ -43,9 +44,28 @@ describe("shared Cytoscape surface", () => {
 		const node = surface.cytoscape?.getElementById("a");
 		node?.trigger("tap");
 		node?.trigger("tap");
+		vi.runAllTimers();
 
-		expect(onNodeClick).toHaveBeenCalledTimes(2);
+		expect(onNodeClick).not.toHaveBeenCalled();
 		expect(onNodeDoubleClick).toHaveBeenCalledOnce();
 		surface.destroy();
+		vi.useRealTimers();
+	});
+
+	it("publishes a single node click after the double-click window", () => {
+		vi.useFakeTimers();
+		const onNodeClick = vi.fn();
+		const surface = new CytoscapeSurface({ headless: true } as never, {
+			onNodeClick,
+		});
+		surface.mount(document.createElement("div"));
+		surface.setElements([{ data: { id: "a", label: "Study" } }], []);
+
+		surface.cytoscape?.getElementById("a").trigger("tap");
+		vi.advanceTimersByTime(300);
+
+		expect(onNodeClick).toHaveBeenCalledOnce();
+		surface.destroy();
+		vi.useRealTimers();
 	});
 });

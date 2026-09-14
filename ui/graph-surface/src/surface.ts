@@ -84,15 +84,6 @@ export class CytoscapeSurface {
 		});
 		cy.on("select unselect", () => this.#publishSelection());
 		cy.on("tap", (event) => this.#handleTap(event));
-		cy.on("tap", "node", (event) =>
-			this.#callbacks.onNodeClick?.(event.target.data()),
-		);
-		cy.on("tap", "edge", (event) =>
-			this.#callbacks.onEdgeClick?.(event.target.data()),
-		);
-		cy.on("tap", (event) => {
-			if (event.target === cy) this.#callbacks.onCanvasClick?.();
-		});
 		cy.on("doubleTap", "node", (event) =>
 			this.#callbacks.onNodeDoubleClick?.(event.target.data()),
 		);
@@ -176,6 +167,15 @@ export class CytoscapeSurface {
 		clearTimeout(this.#tapTimer);
 		this.#tapTimer = setTimeout(() => {
 			this.#lastTapped = undefined;
+			const cy = this.#cy;
+			if (!cy) return;
+			if (event.target === cy) {
+				this.#callbacks.onCanvasClick?.();
+			} else if (tapped.group() === "nodes") {
+				this.#callbacks.onNodeClick?.(tapped.data());
+			} else if (tapped.group() === "edges") {
+				this.#callbacks.onEdgeClick?.(tapped.data());
+			}
 		}, doubleClickDelay);
 	}
 

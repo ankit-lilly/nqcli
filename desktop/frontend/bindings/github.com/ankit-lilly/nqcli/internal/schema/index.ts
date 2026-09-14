@@ -9,6 +9,7 @@ export type {
     Attribute,
     Edge,
     EdgeConnection,
+    Event,
     Snapshot,
     Vertex
 } from "./models.js";

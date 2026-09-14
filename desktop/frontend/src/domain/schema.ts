@@ -2,6 +2,16 @@ import type { GraphElement, GraphSelection } from "./graph";
 
 export type SchemaStatus = "empty" | "running" | "ready" | "failed";
 
+export interface SchemaEvent {
+	type: string;
+	key: string;
+	status: SchemaStatus;
+	phase?: string;
+	completed?: number;
+	total?: number;
+	error?: string;
+}
+
 export interface SchemaAttribute {
 	name: string;
 	dataType: string;

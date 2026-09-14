@@ -40,8 +40,7 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 		() => schemaExplorer.load(),
 		{ initialValue: emptySchema },
 	);
-	// `latest` preserves the last value while refetching instead of notifying
-	// the surrounding Suspense boundary on every progress poll.
+	// Keep the previous snapshot visible while the completed schema is refetched.
 	const currentSnapshot = () => snapshot.latest ?? emptySchema;
 	const elements = createMemo(() => schemaGraphElements(currentSnapshot()));
 	const error = () => {
@@ -58,11 +57,20 @@ export default function SchemaView(props: { profile: Accessor<string> }) {
 		setSelection(null);
 	});
 
-	createEffect(() => {
-		if (currentSnapshot().status !== "running") return;
-		const timer = window.setTimeout(() => void refetch(), 700);
-		onCleanup(() => window.clearTimeout(timer));
+	const unsubscribe = schemaExplorer.subscribe((event) => {
+		const profile = props.profile() || "default";
+		if (event.key !== profile) return;
+		mutate((current) => ({
+			...(current ?? emptySchema),
+			status: event.status,
+			phase: event.phase,
+			completed: event.completed,
+			total: event.total,
+			error: event.error,
+		}));
+		if (event.status === "ready") void refetch();
 	});
+	onCleanup(unsubscribe);
 
 	async function refresh() {
 		if (refreshing()) return;

@@ -1,7 +1,8 @@
-import type { SchemaSnapshot } from "../domain/schema";
+import type { SchemaEvent, SchemaSnapshot } from "../domain/schema";
 
 export interface SchemaPort {
 	get(options?: { refresh?: boolean }): Promise<SchemaSnapshot>;
+	subscribe(listener: (event: SchemaEvent) => void): () => void;
 }
 
 export class SchemaExplorer {
@@ -13,5 +14,9 @@ export class SchemaExplorer {
 
 	refresh(): Promise<SchemaSnapshot> {
 		return this.port.get({ refresh: true });
+	}
+
+	subscribe(listener: (event: SchemaEvent) => void): () => void {
+		return this.port.subscribe(listener);
 	}
 }
